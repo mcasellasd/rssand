@@ -31,6 +31,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const aiSectors = document.getElementById('ai-sectors');
     const aiSummaryDate = document.getElementById('ai-summary-date');
 
+    // NEWSLETTER DOM ELEMENTS
+    const btnGenerateNewsletter = document.getElementById('btn-generate-newsletter');
+    const newsletterSection = document.getElementById('newsletter-section');
+    const newsletterLoading = document.getElementById('newsletter-loading');
+    const newsletterError = document.getElementById('newsletter-error');
+    const newsletterErrorText = document.getElementById('newsletter-error-text');
+    const newsletterContent = document.getElementById('newsletter-content');
+    const newsletterIframePreview = document.getElementById('newsletter-iframe-preview');
+    
+    const btnCopyHtml = document.getElementById('btn-copy-html');
+    const btnCopyText = document.getElementById('btn-copy-text');
+    const btnDownloadHtml = document.getElementById('btn-download-html');
+    const copyToast = document.getElementById('copy-toast');
+
+    let newsletterHtml = '';
+    let newsletterText = '';
+
 
 
     // BRAND BADGES CLASS RESOLVER
@@ -128,6 +145,28 @@ document.addEventListener('DOMContentLoaded', () => {
     // FILTER & RENDER LOOP
     function applyFiltersAndRender() {
         hideLoadingState();
+        
+        // Handle Newsletter Tab specifically
+        const controlPanel = document.querySelector('.control-panel');
+        if (currentTab === 'newsletter') {
+            feedGrid.classList.add('hide');
+            feedSkeletons.classList.add('hide');
+            feedEmpty.classList.add('hide');
+            bopaAlert.classList.add('hide');
+            document.getElementById('ai-summary-container').classList.add('hide');
+            newsletterSection.classList.remove('hide');
+            if (controlPanel) controlPanel.classList.add('hide');
+            
+            // Auto-load newsletter if not loaded yet
+            if (!newsletterHtml) {
+                loadNewsletter();
+            }
+            return;
+        } else {
+            newsletterSection.classList.add('hide');
+            document.getElementById('ai-summary-container').classList.remove('hide');
+            if (controlPanel) controlPanel.classList.remove('hide');
+        }
         
         // Filter by tab
         let filtered = allNewsItems;
@@ -407,6 +446,140 @@ document.addEventListener('DOMContentLoaded', () => {
     // AI Summary button click
     btnAiSummary.addEventListener('click', () => {
         loadAiSummary();
+    });
+
+    // FETCH DAILY NEWSLETTER
+    async function loadNewsletter(bypassCache = false) {
+        btnGenerateNewsletter.disabled = true;
+        btnGenerateNewsletter.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Generant...`;
+        newsletterLoading.classList.remove('hide');
+        newsletterContent.classList.add('hide');
+        newsletterError.classList.add('hide');
+
+        try {
+            const url = bypassCache ? '/api/news/newsletter?refresh=true' : '/api/news/newsletter';
+            const response = await fetch(url);
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || `Error del servidor: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            newsletterHtml = data.html;
+            newsletterText = data.text;
+
+            // Render preview inside iframe to isolate styling
+            const iframeDoc = newsletterIframePreview.contentWindow.document || newsletterIframePreview.contentDocument;
+            iframeDoc.open();
+            iframeDoc.write(newsletterHtml);
+            iframeDoc.close();
+
+            // Adjust iframe height dynamically to fit content
+            newsletterIframePreview.onload = () => {
+                const height = newsletterIframePreview.contentWindow.document.body.scrollHeight;
+                newsletterIframePreview.style.height = (height + 40) + 'px';
+            };
+            
+            // Trigger height calculation immediately in case load event was already fired
+            setTimeout(() => {
+                try {
+                    const height = newsletterIframePreview.contentWindow.document.body.scrollHeight;
+                    newsletterIframePreview.style.height = (height + 40) + 'px';
+                } catch (e) {
+                    console.error("Iframe resize failed:", e);
+                }
+            }, 550);
+
+            // Show content, hide loading
+            newsletterLoading.classList.add('hide');
+            newsletterContent.classList.remove('hide');
+            
+            btnGenerateNewsletter.disabled = false;
+            btnGenerateNewsletter.innerHTML = `<i class="fa-solid fa-rotate"></i> Regenerar Butlletí`;
+
+        } catch (error) {
+            console.error('Error al generar el butlletí:', error);
+            newsletterLoading.classList.add('hide');
+            newsletterContent.classList.add('hide');
+            newsletterError.classList.remove('hide');
+
+            let displayMsg = error.message;
+            if (error.message.includes('QUOTA_EXCEEDED')) {
+                displayMsg = `<strong>Quota de l'API de Gemini excedida.</strong> Obre AI Studio per configurar la facturació o utilitza una VPN fora d'Europa.`;
+            } else {
+                displayMsg = `S'ha produït un error al connectar amb el generador de butlletins:<br><br><code>${error.message}</code>`;
+            }
+            newsletterErrorText.innerHTML = displayMsg;
+
+            btnGenerateNewsletter.disabled = false;
+            btnGenerateNewsletter.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Error al generar`;
+        }
+    }
+
+    // Helper to show visual toast feedback
+    function showToast(message) {
+        copyToast.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${message}`;
+        copyToast.classList.remove('hide');
+        copyToast.classList.add('show');
+        setTimeout(() => {
+            copyToast.classList.remove('show');
+            setTimeout(() => copyToast.classList.add('hide'), 300);
+        }, 2000);
+    }
+
+    // Copy HTML button click
+    btnCopyHtml.addEventListener('click', () => {
+        if (!newsletterHtml) return;
+        navigator.clipboard.writeText(newsletterHtml)
+            .then(() => showToast("Codi HTML copiat al porta-retalls!"))
+            .catch(err => {
+                console.error("Failed to copy HTML:", err);
+                const el = document.createElement('textarea');
+                el.value = newsletterHtml;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                showToast("Codi HTML copiat!");
+            });
+    });
+
+    // Copy Text button click
+    btnCopyText.addEventListener('click', () => {
+        if (!newsletterText) return;
+        navigator.clipboard.writeText(newsletterText)
+            .then(() => showToast("Text pla copiat al porta-retalls!"))
+            .catch(err => {
+                console.error("Failed to copy Text:", err);
+                const el = document.createElement('textarea');
+                el.value = newsletterText;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                showToast("Text pla copiat!");
+            });
+    });
+
+    // Download HTML button click
+    btnDownloadHtml.addEventListener('click', () => {
+        if (!newsletterHtml) return;
+        const blob = new Blob([newsletterHtml], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const todayStr = new Date().toISOString().split('T')[0];
+        a.href = url;
+        a.download = `butlleti_andorra_${todayStr}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+
+    // Generate Newsletter button click
+    btnGenerateNewsletter.addEventListener('click', () => {
+        loadNewsletter(true);
     });
 
     // INITIAL LOAD

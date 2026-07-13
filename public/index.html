@@ -90,6 +90,9 @@
                 <button class="tab-btn" data-tab="bopa">
                     <i class="fa-solid fa-scroll"></i> BOPA <span class="badge-pending">Revisió</span>
                 </button>
+                <button class="tab-btn" data-tab="newsletter">
+                    <i class="fa-solid fa-envelope-open-text"></i> Butlletí Diari
+                </button>
             </div>
         </nav>
 
@@ -161,6 +164,61 @@
                     <div class="ai-summary-footer">
                         <span><i class="fa-solid fa-robot"></i> Generat amb Gemini 3.5 Flash</span>
                         <span id="ai-summary-date"></span>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Newsletter Generator Section -->
+            <section id="newsletter-section" class="glass-card newsletter-card hide">
+                <div class="newsletter-header">
+                    <div class="newsletter-title-area">
+                        <div class="newsletter-icon"><i class="fa-solid fa-envelope-open-text"></i></div>
+                        <div>
+                            <h2>Butlletí Diari d'Andorra</h2>
+                            <p class="newsletter-subtitle">Genera un correu maquetat en HTML amb les novetats dels canals oficials</p>
+                        </div>
+                    </div>
+                    <button id="btn-generate-newsletter" class="btn-refresh">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generar Butlletí
+                    </button>
+                </div>
+
+                <!-- Loading State -->
+                <div id="newsletter-loading" class="ai-loading-state hide">
+                    <div class="ai-loading-spinner">
+                        <div class="spinner-ring"></div>
+                        <i class="fa-solid fa-envelope-open-text spinner-icon"></i>
+                    </div>
+                    <p>L'assistent està recopilant les notícies de les darreres jornades i redactant el butlletí...</p>
+                </div>
+
+                <!-- Error State -->
+                <div id="newsletter-error" class="ai-error-state hide">
+                    <div class="ai-error-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+                    <p id="newsletter-error-text"></p>
+                </div>
+
+                <!-- Content Panel -->
+                <div id="newsletter-content" class="newsletter-content-area hide">
+                    <div class="newsletter-actions-bar">
+                        <button id="btn-copy-html" class="btn-action-text btn-copy-action">
+                            <i class="fa-regular fa-copy"></i> Copia codi HTML
+                        </button>
+                        <button id="btn-copy-text" class="btn-action-text btn-copy-action">
+                            <i class="fa-solid fa-file-lines"></i> Copia text pla
+                        </button>
+                        <button id="btn-download-html" class="btn-action-text btn-download-action">
+                            <i class="fa-solid fa-download"></i> Descarrega fitxer
+                        </button>
+                    </div>
+
+                    <!-- Custom notification bubble for copy actions -->
+                    <div id="copy-toast" class="copy-toast hide">
+                        <i class="fa-solid fa-circle-check"></i> Codi copiat al porta-retalls!
+                    </div>
+
+                    <div class="newsletter-preview-container">
+                        <iframe id="newsletter-iframe-preview" title="Newsletter Preview"></iframe>
                     </div>
                 </div>
             </section>

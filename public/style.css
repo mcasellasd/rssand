@@ -1144,3 +1144,165 @@ input:checked + .slider:before {
     0% { transform: scale(0.95); opacity: 0.8; text-shadow: 0 0 5px rgba(244, 63, 94, 0.2); }
     100% { transform: scale(1.05); opacity: 1; text-shadow: 0 0 15px rgba(244, 63, 94, 0.6); }
 }
+
+/* NEWSLETTER CARD & SYSTEM */
+.newsletter-card {
+    display: flex;
+    flex-direction: column;
+    padding: 2.25rem;
+    gap: 2rem;
+    border-color: rgba(6, 182, 212, 0.2);
+    box-shadow: 0 10px 40px -10px rgba(6, 182, 212, 0.15);
+    animation: fadeIn 0.4s ease-out;
+}
+
+.newsletter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.newsletter-title-area {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.newsletter-icon {
+    font-size: 1.75rem;
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+    color: #fff;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+}
+
+.newsletter-card h2 {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.newsletter-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.newsletter-content-area {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.newsletter-actions-bar {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 1.25rem;
+}
+
+.btn-action-text.btn-copy-action {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    padding: 0.6rem 1.2rem;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.btn-action-text.btn-copy-action:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--accent-blue);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+    transform: translateY(-1px);
+}
+
+.btn-action-text.btn-download-action {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    color: var(--accent-emerald);
+    padding: 0.6rem 1.2rem;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.btn-action-text.btn-download-action:hover {
+    background: rgba(16, 185, 129, 0.2);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+    transform: translateY(-1px);
+}
+
+.newsletter-preview-container {
+    width: 100%;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: #f8fafc;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+#newsletter-iframe-preview {
+    width: 100%;
+    min-height: 500px;
+    border: none;
+    display: block;
+    background: #f8fafc;
+}
+
+.copy-toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #ffffff;
+    padding: 0.8rem 1.5rem;
+    border-radius: 10px;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+    z-index: 9999;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.copy-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.control-panel.hide {
+    display: none !important;
+}
