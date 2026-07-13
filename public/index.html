@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lector RSS & Actualitat Legislativa d'Andorra</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom Style Sheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glass-bg-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <div class="logo-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+                <div>
+                    <h1>Andorra <span>RSS Reader</span></h1>
+                    <p class="subtitle">Seguiment legislatiu, normatiu i institucional del Principat</p>
+                </div>
+            </div>
+            
+            <div class="header-controls">
+                <span id="cache-status" class="cache-badge"><i class="fa-solid fa-spinner fa-spin"></i> Carregant...</span>
+                <button id="btn-refresh" class="btn-refresh" title="Actualitzar dades ara">
+                    <i class="fa-solid fa-rotate"></i> Actualitzar
+                </button>
+            </div>
+        </header>
+
+        <!-- Control Panel (Search & Filters) -->
+        <section class="control-panel">
+            <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="search-input" placeholder="Cerca notícies per paraula clau o concepte...">
+                <button id="search-clear-btn" class="search-clear"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="filter-controls">
+                <div class="toggle-container">
+                    <span class="toggle-label" title="Amaga notícies del Consell General catalogades com actes protocol·laris o culturals">
+                        Filtrar notícies del Consell General (Només normatiu)
+                    </span>
+                    <label class="switch">
+                        <input type="checkbox" id="cg-filter-toggle" checked>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <!-- Navigation Tabs -->
+        <nav class="navigation-tabs">
+            <div class="tabs-scroll-container">
+                <button class="tab-btn active" data-tab="all">
+                    <i class="fa-solid fa-layer-group"></i> Tot
+                </button>
+                <button class="tab-btn" data-tab="consell_noticies">
+                    <i class="fa-solid fa-landmark"></i> Consell General
+                </button>
+                <button class="tab-btn" data-tab="consell_iniciatives">
+                    <i class="fa-solid fa-file-signature"></i> Iniciatives
+                </button>
+                <button class="tab-btn" data-tab="apda">
+                    <i class="fa-solid fa-shield-halved"></i> APDA
+                </button>
+                <button class="tab-btn" data-tab="govern">
+                    <i class="fa-solid fa-building-columns"></i> Govern
+                </button>
+                <button class="tab-btn" data-tab="andorra_ue">
+                    <i class="fa-solid fa-globe-europe"></i> Andorra - UE
+                </button>
+                <button class="tab-btn" data-tab="afa">
+                    <i class="fa-solid fa-coins"></i> AFA
+                </button>
+                <button class="tab-btn" data-tab="bopa">
+                    <i class="fa-solid fa-scroll"></i> BOPA <span class="badge-pending">Revisió</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Info alert for manual BOPA review -->
+        <div id="bopa-alert" class="alert-box glass-card hide">
+            <div class="alert-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div class="alert-body">
+                <h3>Atenció: Revisió Manual Pendent del BOPA</h3>
+                <p>El portal oficial del <strong>Butlletí Oficial del Principat d'Andorra (BOPA)</strong> utilitza arquitectura de client JavaScript que no és accessible via scraper directe. Les notícies següents s'obtenen a partir de cerques web de contingut setmanal indexat. Es recomana fer un control manual a la font oficial.</p>
+                <div class="alert-actions">
+                    <a href="https://www.bopa.ad" target="_blank" class="btn-alert-link">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Anar a bopa.ad
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- News Grid -->
+        <main class="news-feed">
+            <!-- AI Summary Section -->
+            <section id="ai-summary-container" class="glass-card ai-summary-card">
+                <div class="ai-summary-header">
+                    <div class="ai-title-area">
+                        <div class="ai-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+                        <div>
+                            <h2>Resum Setmanal amb IA</h2>
+                            <p class="ai-subtitle">Síntesi intel·ligent de l'actualitat legislativa i institucional d'Andorra dels darrers 7 dies</p>
+                        </div>
+                    </div>
+                    <button id="btn-ai-summary" class="btn-ai-summary">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generar Resum
+                    </button>
+                </div>
+                
+                <!-- Loading State -->
+                <div id="ai-loading" class="ai-loading-state hide">
+                    <div class="ai-loading-spinner">
+                        <div class="spinner-ring"></div>
+                        <i class="fa-solid fa-wand-magic-sparkles spinner-icon"></i>
+                    </div>
+                    <p>La Intel·ligència Artificial està analitzant i resumint les notícies de la setmana...</p>
+                </div>
+
+                <!-- Error State -->
+                <div id="ai-error" class="ai-error-state hide">
+                    <div class="ai-error-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+                    <p id="ai-error-text"></p>
+                </div>
+
+                <!-- Content State -->
+                <div id="ai-summary-content" class="ai-content-area hide">
+                    <div class="ai-summary-block">
+                        <h3><i class="fa-solid fa-align-left"></i> Resum Executiu</h3>
+                        <p id="ai-exec-summary"></p>
+                    </div>
+                    
+                    <div class="ai-details-grid">
+                        <div class="ai-summary-block">
+                            <h3><i class="fa-solid fa-list-check"></i> Punts Clau</h3>
+                            <ul id="ai-key-points" class="ai-bullets"></ul>
+                        </div>
+                        
+                        <div class="ai-summary-block">
+                            <h3><i class="fa-solid fa-tags"></i> Sectors Destacats</h3>
+                            <div id="ai-sectors" class="ai-sectors-list"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="ai-summary-footer">
+                        <span><i class="fa-solid fa-robot"></i> Generat amb Gemini 3.5 Flash</span>
+                        <span id="ai-summary-date"></span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Skeleton Loaders -->
+            <div id="feed-skeletons" class="news-grid">
+                <div class="skeleton-card glass-card">
+                    <div class="skeleton-shimmer"></div>
+                    <div class="skeleton-header">
+                        <div class="skeleton-badge"></div>
+                        <div class="skeleton-date"></div>
+                    </div>
+                    <div class="skeleton-title"></div>
+                    <div class="skeleton-title short"></div>
+                    <div class="skeleton-text"></div>
+                    <div class="skeleton-text"></div>
+                    <div class="skeleton-footer"></div>
+                </div>
+                <div class="skeleton-card glass-card">
+                    <div class="skeleton-shimmer"></div>
+                    <div class="skeleton-header">
+                        <div class="skeleton-badge"></div>
+                        <div class="skeleton-date"></div>
+                    </div>
+                    <div class="skeleton-title"></div>
+                    <div class="skeleton-title short"></div>
+                    <div class="skeleton-text"></div>
+                    <div class="skeleton-text"></div>
+                    <div class="skeleton-footer"></div>
+                </div>
+                <div class="skeleton-card glass-card">
+                    <div class="skeleton-shimmer"></div>
+                    <div class="skeleton-header">
+                        <div class="skeleton-badge"></div>
+                        <div class="skeleton-date"></div>
+                    </div>
+                    <div class="skeleton-title"></div>
+                    <div class="skeleton-title short"></div>
+                    <div class="skeleton-text"></div>
+                    <div class="skeleton-text"></div>
+                    <div class="skeleton-footer"></div>
+                </div>
+            </div>
+
+            <!-- Actual Feed Content -->
+            <div id="feed-grid" class="news-grid hide"></div>
+            
+            <!-- Empty State -->
+            <div id="feed-empty" class="empty-state glass-card hide">
+                <div class="empty-icon"><i class="fa-solid fa-folder-open"></i></div>
+                <h2>No s'han trobat notícies</h2>
+                <p>No hi ha elements que coincideixin amb els filtres actius o la cerca especificada.</p>
+                <button id="btn-reset-filters" class="btn-reset-filters">Netejar cerca i filtres</button>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>&copy; 2026 Andorra RSS Reader - Seguiment Parlamentari i Regulador. Fet per a consulta personal.</p>
+            <p class="technical-info">Dades obtingudes dels portals del Consell General, Govern d'Andorra, APDA, AndorraUE, AFA i BOPA.</p>
+        </footer>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
