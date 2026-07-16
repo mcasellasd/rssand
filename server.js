@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 3000;
 // In-memory cache for news feed data
 let newsCache = null;
 let cacheTimestamp = null;
+let sourceHealthCache = [];
 const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
 
 // Cache for AI weekly summary and newsletter content
@@ -457,21 +458,49 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Helper to fetch and cache all feeds
 async function fetchAllFeeds() {
   console.log("Fetching feeds...");
-  const results = await Promise.allSettled([
-    scrapeConsellGeneralNews(),
-    scrapeAPDAFeed(),
-    scrapeGovernNews(),
-    scrapeAndorraUE(),
-    scrapeAFANews(),
-    scrapeBOPANews()
-  ]);
+  const sources = [
+    { id: 'consell_noticies', name: 'Consell General', url: 'https://www.consellgeneral.ad/ca/noticies', load: scrapeConsellGeneralNews },
+    { id: 'apda', name: 'APDA', url: 'https://www.apda.ad', load: scrapeAPDAFeed },
+    { id: 'govern', name: "Govern d'Andorra", url: 'https://www.govern.ad/ca/actualitat', load: scrapeGovernNews },
+    { id: 'andorra_ue', name: 'Andorra–UE', url: 'https://www.andorraue.ad/ca/actualitat/', load: scrapeAndorraUE },
+    { id: 'afa', name: 'AFA', url: 'https://www.afa.ad', load: scrapeAFANews },
+    { id: 'bopa', name: 'BOPA', url: 'https://www.bopa.ad', load: scrapeBOPANews }
+  ];
+  const checkedAt = new Date().toISOString();
+  const results = await Promise.allSettled(sources.map(source => source.load()));
 
   const allItems = [];
-  results.forEach((r, idx) => {
-    if (r.status === 'fulfilled') {
-      allItems.push(...r.value);
+  sourceHealthCache = results.map((result, index) => {
+    const source = sources[index];
+    if (result.status === 'fulfilled') {
+      const items = Array.isArray(result.value) ? result.value : [];
+      allItems.push(...items);
+      const latestItemDate = items
+        .map(item => item.date)
+        .filter(Boolean)
+        .sort()
+        .reverse()[0] || null;
+
+      return {
+        id: source.id,
+        name: source.name,
+        url: source.url,
+        status: items.length > 0 ? 'ok' : 'warning',
+        itemsCount: items.length,
+        latestItemDate,
+        checkedAt
+      };
     } else {
-      console.error(`Feed index ${idx} failed to load:`, r.reason);
+      console.error(`Feed ${source.name} failed to load:`, result.reason);
+      return {
+        id: source.id,
+        name: source.name,
+        url: source.url,
+        status: 'error',
+        itemsCount: 0,
+        latestItemDate: null,
+        checkedAt
+      };
     }
   });
 
@@ -504,6 +533,7 @@ app.get('/api/news', async (req, res) => {
     return res.json({
       timestamp: new Date(cacheTimestamp).toISOString(),
       cached: true,
+      sources: sourceHealthCache,
       items: newsCache
     });
   }
@@ -513,12 +543,26 @@ app.get('/api/news', async (req, res) => {
     res.json({
       timestamp: new Date(cacheTimestamp).toISOString(),
       cached: false,
+      sources: sourceHealthCache,
       items: items
     });
   } catch (err) {
     console.error("Error serving news:", err);
     res.status(500).json({ error: "Error carregant les notícies." });
   }
+});
+
+app.get('/api/health', (req, res) => {
+  const healthySources = sourceHealthCache.filter(source => source.status === 'ok').length;
+  const totalSources = sourceHealthCache.length;
+  res.status(totalSources > 0 && healthySources === 0 ? 503 : 200).json({
+    status: totalSources > 0 && healthySources === totalSources ? 'ok' : 'degraded',
+    timestamp: cacheTimestamp ? new Date(cacheTimestamp).toISOString() : null,
+    cachedItems: newsCache ? newsCache.length : 0,
+    healthySources,
+    totalSources,
+    sources: sourceHealthCache
+  });
 });
 
 // Helper function to generate and cache weekly AI Summary

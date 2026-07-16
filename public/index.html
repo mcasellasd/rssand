@@ -36,11 +36,25 @@
             
             <div class="header-controls">
                 <span id="cache-status" class="cache-badge"><i class="fa-solid fa-spinner fa-spin"></i> Carregant...</span>
+                <button id="btn-source-status" class="source-status-btn" type="button" aria-expanded="false" aria-controls="source-status-panel">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i> Fonts
+                </button>
                 <button id="btn-refresh" class="btn-refresh" title="Actualitzar dades ara">
                     <i class="fa-solid fa-rotate"></i> Actualitzar
                 </button>
             </div>
         </header>
+
+        <section id="source-status-panel" class="source-status-panel glass-card hide" aria-live="polite">
+            <div class="source-status-heading">
+                <div>
+                    <h2>Traçabilitat de les fonts</h2>
+                    <p>Estat de la darrera consulta als canals oficials.</p>
+                </div>
+                <span id="source-status-summary"></span>
+            </div>
+            <div id="source-status-grid" class="source-status-grid"></div>
+        </section>
 
         <!-- Control Panel (Search & Filters) -->
         <section class="control-panel">

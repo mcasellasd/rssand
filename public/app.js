@@ -15,6 +15,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const cgFilterToggle = document.getElementById('cg-filter-toggle');
     const bopaAlert = document.getElementById('bopa-alert');
     const cacheStatus = document.getElementById('cache-status');
+    const sourceStatusBtn = document.getElementById('btn-source-status');
+    const sourceStatusPanel = document.getElementById('source-status-panel');
+    const sourceStatusSummary = document.getElementById('source-status-summary');
+    const sourceStatusGrid = document.getElementById('source-status-grid');
     
     const refreshBtn = document.getElementById('btn-refresh');
     const resetFiltersBtn = document.getElementById('btn-reset-filters');
@@ -112,6 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Update cache status badge
             updateCacheBadge(data.cached, data.timestamp);
+            updateSourceStatus(data.sources || []);
             
             // Apply filtering and render
             applyFiltersAndRender();
@@ -119,6 +124,44 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error carregant les notícies:', error);
             showErrorState(error.message);
         }
+    }
+
+    function updateSourceStatus(sources) {
+        const healthy = sources.filter(source => source.status === 'ok').length;
+        const total = sources.length;
+        const hasIncidents = sources.some(source => source.status !== 'ok');
+
+        sourceStatusBtn.className = `source-status-btn ${hasIncidents ? 'degraded' : 'healthy'}`;
+        sourceStatusBtn.innerHTML = hasIncidents
+            ? `<i class="fa-solid fa-triangle-exclamation"></i> Fonts ${healthy}/${total}`
+            : `<i class="fa-solid fa-circle-check"></i> Fonts ${healthy}/${total}`;
+        sourceStatusSummary.textContent = hasIncidents
+            ? `${healthy} de ${total} fonts disponibles`
+            : `${total} fonts oficials disponibles`;
+
+        sourceStatusGrid.innerHTML = '';
+        sources.forEach(source => {
+            const item = document.createElement('a');
+            item.className = `source-status-item status-${source.status}`;
+            item.href = safeExternalUrl(source.url);
+            item.target = '_blank';
+            item.rel = 'noopener noreferrer';
+            const statusText = source.status === 'ok'
+                ? `${source.itemsCount} publicacions`
+                : source.status === 'warning' ? 'Sense resultats' : 'No disponible';
+            const latestText = source.latestItemDate
+                ? `Darrera publicació: ${formatDateDisplay(source.latestItemDate)}`
+                : 'Sense data recent';
+            item.innerHTML = `
+                <span class="source-status-icon"><i class="fa-solid ${source.status === 'ok' ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i></span>
+                <span>
+                    <strong>${escapeHtml(source.name)}</strong>
+                    <small>${escapeHtml(statusText)} · ${escapeHtml(latestText)}</small>
+                </span>
+                <i class="fa-solid fa-arrow-up-right-from-square source-status-link-icon"></i>
+            `;
+            sourceStatusGrid.appendChild(item);
+        });
     }
 
     // UPDATE THE CACHE BADGE STATUS
@@ -331,6 +374,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Refresh Feed button
     refreshBtn.addEventListener('click', () => {
         loadNewsFeed(true);
+    });
+
+    sourceStatusBtn.addEventListener('click', () => {
+        const willOpen = sourceStatusPanel.classList.contains('hide');
+        sourceStatusPanel.classList.toggle('hide');
+        sourceStatusBtn.setAttribute('aria-expanded', String(willOpen));
     });
 
     // Reset filters empty state button

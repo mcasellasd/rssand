@@ -186,6 +186,91 @@ body {
     color: var(--accent-blue);
 }
 
+.source-status-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    padding: 0.5rem 0.85rem;
+    border-radius: 9999px;
+    font: 600 0.75rem var(--font-body);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.source-status-btn.healthy {
+    color: #6ee7b7;
+    border-color: rgba(16, 185, 129, 0.25);
+}
+
+.source-status-btn.degraded {
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.source-status-panel {
+    padding: 1.25rem;
+}
+
+.source-status-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.source-status-heading h2 {
+    font: 600 1rem var(--font-heading);
+}
+
+.source-status-heading p,
+.source-status-heading span {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+}
+
+.source-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
+    gap: 0.75rem;
+}
+
+.source-status-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.8rem;
+    color: var(--text-primary);
+    text-decoration: none;
+    border-radius: 10px;
+    border: 1px solid var(--card-border);
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.source-status-item small {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+}
+
+.source-status-item.status-ok .source-status-icon {
+    color: var(--accent-emerald);
+}
+
+.source-status-item.status-warning .source-status-icon,
+.source-status-item.status-error .source-status-icon {
+    color: var(--accent-amber);
+}
+
+.source-status-link-icon {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+}
+
 .btn-refresh {
     background: linear-gradient(135deg, var(--accent-blue), var(--accent-violet));
     color: #fff;
