@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lector RSS & Actualitat Legislativa d'Andorra</title>
+    <title>Andorra Legal Brief · Novetats jurídiques</title>
+    <link rel="alternate" type="application/rss+xml" title="Andorra Legal Brief RSS" href="/feed.xml">
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,18 +30,77 @@
             <div class="logo-area">
                 <div class="logo-icon"><i class="fa-solid fa-scale-balanced"></i></div>
                 <div>
-                    <h1>Andorra <span>RSS Reader</span></h1>
-                    <p class="subtitle">Seguiment legislatiu, normatiu i institucional del Principat</p>
+                    <h1>Andorra <span>Legal Brief</span></h1>
+                    <p class="subtitle">Novetats legislatives i reguladores per a la pràctica jurídica</p>
                 </div>
             </div>
             
             <div class="header-controls">
                 <span id="cache-status" class="cache-badge"><i class="fa-solid fa-spinner fa-spin"></i> Carregant...</span>
+                <button id="btn-subscribe" class="rss-subscribe-btn" type="button" aria-expanded="false" aria-controls="subscribe-panel">
+                    <i class="fa-solid fa-paper-plane"></i> Rep el brief
+                </button>
+                <button id="btn-source-status" class="source-status-btn" type="button" aria-expanded="false" aria-controls="source-status-panel">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i> Fonts
+                </button>
                 <button id="btn-refresh" class="btn-refresh" title="Actualitzar dades ara">
                     <i class="fa-solid fa-rotate"></i> Actualitzar
                 </button>
             </div>
         </header>
+
+        <section id="subscribe-panel" class="subscribe-panel glass-card hide" aria-live="polite">
+            <div class="subscribe-copy">
+                <span class="eyebrow"><i class="fa-solid fa-paper-plane"></i> Subscripció personalitzada</span>
+                <h2>Rep només les novetats que t’interessen</h2>
+                <p>Tria l’àrea jurídica i rep una selecció útil per al despatx. Pots utilitzar el correu, quan estigui activat, o un canal RSS sense facilitar dades personals.</p>
+            </div>
+            <div class="subscribe-builder">
+                <label for="subscribe-area">
+                    Àrea de pràctica
+                    <select id="subscribe-area">
+                        <option value="">Totes les àrees</option>
+                    </select>
+                </label>
+                <label class="subscribe-checkbox" for="subscribe-high-only">
+                    <input id="subscribe-high-only" type="checkbox">
+                    <span>Només impacte jurídic alt</span>
+                </label>
+                <form id="email-subscribe-form" class="email-subscribe-form hide" novalidate>
+                    <label for="subscribe-email">
+                        Correu professional
+                        <input id="subscribe-email" name="email" type="email" autocomplete="email" placeholder="nom@despatx.ad" maxlength="254" required>
+                    </label>
+                    <input id="subscribe-website" name="website" class="subscription-honeypot" type="text" tabindex="-1" autocomplete="off" aria-hidden="true">
+                    <label class="subscribe-checkbox" for="subscribe-consent">
+                        <input id="subscribe-consent" type="checkbox" required>
+                        <span>Accepto la <a id="subscribe-privacy-link" href="#" target="_blank" rel="noopener noreferrer">política de privacitat</a> i l’enviament d’un correu de confirmació.</span>
+                    </label>
+                    <button id="btn-email-subscribe" type="submit"><i class="fa-regular fa-envelope"></i> Subscriu-m’hi per correu</button>
+                </form>
+                <p id="email-subscribe-unavailable" class="email-subscribe-unavailable">La subscripció per correu s’activarà quan el servei de doble confirmació estigui configurat. Mentrestant, utilitza el canal RSS.</p>
+                <div class="subscribe-divider"><span>Canal RSS</span></div>
+                <div class="subscribe-url-row">
+                    <input id="subscribe-feed-url" type="text" readonly aria-label="URL del canal RSS personalitzat">
+                    <button id="btn-copy-feed" type="button"><i class="fa-regular fa-copy"></i> Copia</button>
+                    <a id="btn-open-feed" href="/feed.xml" target="_blank" rel="noopener noreferrer">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Obre
+                    </a>
+                </div>
+                <p id="subscribe-feedback" class="subscribe-feedback" role="status"></p>
+            </div>
+        </section>
+
+        <section id="source-status-panel" class="source-status-panel glass-card hide" aria-live="polite">
+            <div class="source-status-heading">
+                <div>
+                    <h2>Traçabilitat de les fonts</h2>
+                    <p>Estat de la darrera consulta als canals oficials.</p>
+                </div>
+                <span id="source-status-summary"></span>
+            </div>
+            <div id="source-status-grid" class="source-status-grid"></div>
+        </section>
 
         <!-- Control Panel (Search & Filters) -->
         <section class="control-panel">
@@ -49,11 +109,18 @@
                 <input type="text" id="search-input" placeholder="Cerca notícies per paraula clau o concepte...">
                 <button id="search-clear-btn" class="search-clear"><i class="fa-solid fa-xmark"></i></button>
             </div>
+
+            <label class="practice-filter" for="practice-area-select">
+                <i class="fa-solid fa-briefcase"></i>
+                <select id="practice-area-select" aria-label="Filtra per àrea de pràctica">
+                    <option value="all">Totes les àrees de pràctica</option>
+                </select>
+            </label>
             
             <div class="filter-controls">
                 <div class="toggle-container">
-                    <span class="toggle-label" title="Amaga notícies del Consell General catalogades com actes protocol·laris o culturals">
-                        Filtrar notícies del Consell General (Només normatiu)
+                    <span class="toggle-label" title="Prioritza les publicacions amb impacte jurídic alt o que requereixen seguiment professional">
+                        Mostrar només novetats amb rellevància jurídica
                     </span>
                     <label class="switch">
                         <input type="checkbox" id="cg-filter-toggle" checked>
@@ -69,11 +136,17 @@
                 <button class="tab-btn active" data-tab="all">
                     <i class="fa-solid fa-layer-group"></i> Tot
                 </button>
+                <button class="tab-btn" data-tab="new">
+                    <i class="fa-solid fa-bell"></i> Noves <span id="new-items-count" class="tab-count hide">0</span>
+                </button>
+                <button class="tab-btn" data-tab="saved">
+                    <i class="fa-solid fa-bookmark"></i> Pendents <span id="saved-items-count" class="tab-count hide">0</span>
+                </button>
                 <button class="tab-btn" data-tab="consell_noticies">
                     <i class="fa-solid fa-landmark"></i> Consell General
                 </button>
-                <button class="tab-btn" data-tab="consell_iniciatives">
-                    <i class="fa-solid fa-file-signature"></i> Iniciatives
+                <button class="tab-btn" data-tab="tramitacio">
+                    <i class="fa-solid fa-file-signature"></i> Tramitació legislativa
                 </button>
                 <button class="tab-btn" data-tab="apda">
                     <i class="fa-solid fa-shield-halved"></i> APDA
@@ -88,10 +161,10 @@
                     <i class="fa-solid fa-coins"></i> AFA
                 </button>
                 <button class="tab-btn" data-tab="bopa">
-                    <i class="fa-solid fa-scroll"></i> BOPA <span class="badge-pending">Revisió</span>
+                    <i class="fa-solid fa-scroll"></i> BOPA <span class="badge-official">Oficial</span>
                 </button>
                 <button class="tab-btn" data-tab="newsletter">
-                    <i class="fa-solid fa-envelope-open-text"></i> Butlletí Diari
+                    <i class="fa-solid fa-envelope-open-text"></i> Butlletí Setmanal
                 </button>
             </div>
         </nav>
@@ -100,8 +173,8 @@
         <div id="bopa-alert" class="alert-box glass-card hide">
             <div class="alert-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
             <div class="alert-body">
-                <h3>Atenció: Revisió Manual Pendent del BOPA</h3>
-                <p>El portal oficial del <strong>Butlletí Oficial del Principat d'Andorra (BOPA)</strong> utilitza arquitectura de client JavaScript que no és accessible via scraper directe. Les notícies següents s'obtenen a partir de cerques web de contingut setmanal indexat. Es recomana fer un control manual a la font oficial.</p>
+                <h3>Documents oficials del BOPA</h3>
+                <p>Els resultats s'obtenen de l'API pública que alimenta el portal oficial i enllacen directament amb cada document publicat. La selecció prioritza lleis, reglaments, decrets i disposicions amb interès jurídic.</p>
                 <div class="alert-actions">
                     <a href="https://www.bopa.ad" target="_blank" class="btn-alert-link">
                         <i class="fa-solid fa-arrow-up-right-from-square"></i> Anar a bopa.ad
@@ -118,12 +191,12 @@
                     <div class="ai-title-area">
                         <div class="ai-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
                         <div>
-                            <h2>Resum Setmanal amb IA</h2>
-                            <p class="ai-subtitle">Síntesi intel·ligent de l'actualitat legislativa i institucional d'Andorra dels darrers 7 dies</p>
+                            <h2>Brief jurídic setmanal</h2>
+                            <p class="ai-subtitle">Síntesi professional de fonts oficials, orientada a la pràctica jurídica andorrana</p>
                         </div>
                     </div>
                     <button id="btn-ai-summary" class="btn-ai-summary">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generar Resum
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generar brief
                     </button>
                 </div>
                 
@@ -133,7 +206,7 @@
                         <div class="spinner-ring"></div>
                         <i class="fa-solid fa-wand-magic-sparkles spinner-icon"></i>
                     </div>
-                    <p>La Intel·ligència Artificial està analitzant i resumint les notícies de la setmana...</p>
+                    <p>Preparant el brief a partir de les publicacions oficials de la setmana...</p>
                 </div>
 
                 <!-- Error State -->
@@ -162,7 +235,7 @@
                     </div>
                     
                     <div class="ai-summary-footer">
-                        <span><i class="fa-solid fa-robot"></i> Generat amb Gemini 3.5 Flash</span>
+                        <span id="ai-summary-method"><i class="fa-solid fa-scale-balanced"></i> Síntesi de fonts oficials</span>
                         <span id="ai-summary-date"></span>
                     </div>
                 </div>
@@ -174,13 +247,21 @@
                     <div class="newsletter-title-area">
                         <div class="newsletter-icon"><i class="fa-solid fa-envelope-open-text"></i></div>
                         <div>
-                            <h2>Butlletí Diari d'Andorra</h2>
-                            <p class="newsletter-subtitle">Genera un correu maquetat en HTML amb les novetats dels canals oficials</p>
+                            <h2>Butlletí Jurídic Setmanal</h2>
+                            <p class="newsletter-subtitle">Correu maquetat amb les novetats oficials que poden requerir revisió del despatx</p>
                         </div>
                     </div>
-                    <button id="btn-generate-newsletter" class="btn-refresh">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generar Butlletí
-                    </button>
+                    <div class="newsletter-controls">
+                        <label for="newsletter-area-select">
+                            Edició per àrea
+                            <select id="newsletter-area-select" aria-label="Selecciona l’àrea de pràctica del butlletí">
+                                <option value="all">Totes les àrees de pràctica</option>
+                            </select>
+                        </label>
+                        <button id="btn-generate-newsletter" class="btn-refresh">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Generar Butlletí
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Loading State -->
@@ -277,10 +358,11 @@
 
         <!-- Footer -->
         <footer class="app-footer">
-            <p>&copy; 2026 Andorra RSS Reader - Seguiment Parlamentari i Regulador. Fet per a consulta personal.</p>
+            <p>&copy; 2026 Andorra Legal Brief · Fonts oficials · Síntesi informativa, no assessorament jurídic.</p>
             <p class="technical-info">Dades obtingudes dels portals del Consell General, Govern d'Andorra, APDA, AndorraUE, AFA i BOPA.</p>
         </footer>
     </div>
+    <script src="state.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
