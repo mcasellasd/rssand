@@ -173,6 +173,7 @@ function buildLegalRss(items, generatedAt, options = {}) {
   const highRelevanceOnly = options.relevance === 'high';
   const legalItems = items
     .filter(item =>
+      item.legalRelevance !== 'low' &&
       (!selectedArea || item.practiceArea === selectedArea) &&
       (!highRelevanceOnly || item.legalRelevance === 'high')
     )
@@ -1182,6 +1183,86 @@ app.get('/feed.xml', async (req, res) => {
   }
 });
 
+// Helper function to audit the summary with Mistral (Second Brain Auditor)
+async function auditSummaryWithMistral(newsForPrompt, draftSummary) {
+  const apiKey = (process.env.MISTRAL_API_KEY || '').trim();
+  const model = (process.env.MISTRAL_MODEL || 'open-mistral-nemo').trim();
+
+  if (!apiKey) {
+    console.log("Mistral API key not configured, skipping audit step.");
+    return draftSummary;
+  }
+
+  console.log("Auditing draft summary with Mistral API using model:", model);
+
+  const newsSummaryText = newsForPrompt.map((n, idx) => 
+    `[${idx + 1}] Font: ${n.source} | Data: ${n.date} | Tipus: ${n.documentType} | Àrea: ${n.practiceArea}\nTítol: ${n.title}\nDescripció: ${n.snippet || ''}\nEntrada en vigor explícita: ${n.entryIntoForce || 'No identificada al document'}\nPossibles terminis literals: ${n.operativeDeadlines?.join(' | ') || 'No identificats al document'}\nEnllaç: ${n.link || ''}\n`
+  ).join('\n---\n');
+
+  const systemPrompt = `Ets un advocat sènior andorrà i actues com a auditor de qualitat jurídica de publicacions i resums de premsa de caràcter oficial.
+La teva missió és verificar que el resum (esborrany) generat per un redactor júnior no contingui al·lucinacions, errors fàctics o interpretacions jurídiques excessives i que es correspongui fidelment amb la llista de notícies de partida.
+
+Dades de partida oficials:
+${newsSummaryText}
+
+Compara-les amb l'esborrany que et lliurarà l'usuari. Hauràs de retornar un JSON completament vàlid corregint qualsevol error fàctic, d'enllaç, de data o de termini literal.
+El format de sortida JSON ha de tenir exactament la següent estructura:
+{
+  "resumExecutiu": "Un resum redactat de l'actualitat institucional de la setmana a Andorra, en 1 o 2 paràgrafs.",
+  "puntsClau": ["Fet 1", "Fet 2", ...],
+  "categoriesDestacades": [
+    { "nom": "Consell General", "explicacio": "..." }
+  ],
+  "noticiesAmbImpacte": [
+    { "titol": "...", "link": "...", "impacte": "..." }
+  ]
+}
+
+REGLAMENT D'AUDITORIA:
+- No inventis cap dada. Si la informació no apareix a les dades de partida oficials, eliminala.
+- Els enllaços ("link") a "noticiesAmbImpacte" han de correspondre exactament a algun dels enllaços de la llista original de partida. Si un enllaç és diferent o inventat, corregeix-lo.
+- L'explicació d'impacte ha de ser pràctica per a un advocat, sinó dónes assessorament jurídic formal.
+- La resposta ha de ser exclusivament el contingut en format JSON, redactat en català.`;
+
+  const userMessage = `Esborrany de resum a auditar:\n${JSON.stringify(draftSummary, null, 2)}`;
+
+  try {
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage }
+        ],
+        response_format: { type: 'json_object' }
+      }),
+      signal: AbortSignal.timeout(20000)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Mistral API returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const auditedJsonText = data.choices?.[0]?.message?.content;
+    if (!auditedJsonText) {
+      throw new Error('Mistral response content is empty');
+    }
+
+    const auditedSummary = JSON.parse(auditedJsonText);
+    console.log("Mistral auditing completed successfully.");
+    return auditedSummary;
+  } catch (error) {
+    console.error("Error during Mistral auditing, falling back to original draft:", error.message);
+    return draftSummary;
+  }
+}
+
 // Helper function to generate and cache weekly AI Summary
 async function getAiSummary(forceRefresh = false, requestedPracticeArea = 'all') {
   const now = Date.now();
@@ -1317,7 +1398,13 @@ Per a "noticiesAmbImpacte", selecciona fins a 6 publicacions i conserva exactame
     });
 
     const summaryJson = JSON.parse(response.text);
-    const summary = normalizeAiSummary(summaryJson, newsForPrompt, fallbackSummary);
+    let auditedJson = summaryJson;
+    try {
+      auditedJson = await auditSummaryWithMistral(newsForPrompt, summaryJson);
+    } catch (auditErr) {
+      console.error("Mistral auditing failed, using Gemini's draft summary:", auditErr.message);
+    }
+    const summary = normalizeAiSummary(auditedJson, newsForPrompt, fallbackSummary);
     aiSummaryCache.set(requestedArea, { timestamp: Date.now(), data: summary });
     return summary;
   } catch (error) {
