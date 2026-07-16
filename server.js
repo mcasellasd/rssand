@@ -954,7 +954,10 @@ async function fetchAllFeeds() {
     { id: 'elperiodic', name: 'El Periòdic', url: 'https://elperiodic.ad/feed/', load: () => scrapeGenericRSS('https://elperiodic.ad/feed/', 'El Periòdic', 'elperiodic') },
     { id: 'andorraara', name: 'Andorra Ara', url: 'https://andorraara.com/ca/feed', load: () => scrapeGenericRSS('https://andorraara.com/ca/feed', 'Andorra Ara', 'andorraara') },
     { id: 'altaveu', name: 'Altaveu', url: 'https://www.altaveu.com/uploads/feeds/feed_altaveu_ca.xml', load: () => scrapeGenericRSS('https://www.altaveu.com/uploads/feeds/feed_altaveu_ca.xml', 'Altaveu', 'altaveu') },
-    { id: 'digitalandorra', name: 'Digital Andorra', url: 'https://digitalandorra.com/feed/', load: () => scrapeGenericRSS('https://digitalandorra.com/feed/', 'Digital Andorra', 'digitalandorra') }
+    { id: 'digitalandorra', name: 'Digital Andorra', url: 'https://digitalandorra.com/feed/', load: () => scrapeGenericRSS('https://digitalandorra.com/feed/', 'Digital Andorra', 'digitalandorra') },
+    { id: 'diariandorra', name: 'Diari d\'Andorra', url: 'https://www.diariandorra.ad/rss.xml', load: () => scrapeGenericRSS('https://www.diariandorra.ad/rss.xml', 'Diari d\'Andorra', 'diariandorra') },
+    { id: 'ana', name: 'ANA.ad', url: 'https://www.ana.ad/rss.xml', load: () => scrapeGenericRSS('https://www.ana.ad/rss.xml', 'ANA.ad', 'ana') },
+    { id: 'dondonzell', name: 'Don Donzell', url: 'https://dondonzell.com/feed/', load: () => scrapeGenericRSS('https://dondonzell.com/feed/', 'Don Donzell', 'dondonzell') }
   ];
   const checkedAt = new Date().toISOString();
   const results = await Promise.allSettled(sources.map(source => source.load()));

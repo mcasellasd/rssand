@@ -58,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const emailSubscribeBtn = document.getElementById('btn-email-subscribe');
     
     const refreshBtn = document.getElementById('btn-refresh');
+    const themeBtn = document.getElementById('btn-theme-toggle');
     const resetFiltersBtn = document.getElementById('btn-reset-filters');
     const tabs = document.querySelectorAll('.tab-btn');
     const newItemsCount = document.getElementById('new-items-count');
@@ -108,7 +109,10 @@ document.addEventListener('DOMContentLoaded', () => {
         'elperiodic': 'badge-premsa',
         'andorraara': 'badge-premsa',
         'altaveu': 'badge-premsa',
-        'digitalandorra': 'badge-premsa'
+        'digitalandorra': 'badge-premsa',
+        'diariandorra': 'badge-premsa',
+        'ana': 'badge-premsa',
+        'dondonzell': 'badge-premsa'
     };
 
     const sourceIcons = {
@@ -123,7 +127,10 @@ document.addEventListener('DOMContentLoaded', () => {
         'elperiodic': 'fa-newspaper',
         'andorraara': 'fa-newspaper',
         'altaveu': 'fa-newspaper',
-        'digitalandorra': 'fa-newspaper'
+        'digitalandorra': 'fa-newspaper',
+        'diariandorra': 'fa-newspaper',
+        'ana': 'fa-newspaper',
+        'dondonzell': 'fa-newspaper'
     };
 
     // FORMAT DATE (YYYY-MM-DD -> DD/MM/YYYY)
@@ -605,6 +612,21 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshBtn.addEventListener('click', () => {
         loadNewsFeed(true);
     });
+
+    // Theme Toggle Logic
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'light') {
+        document.body.classList.add('light-mode');
+        if (themeBtn) themeBtn.innerHTML = '<i class="fa-solid fa-moon"></i>';
+    }
+
+    if (themeBtn) {
+        themeBtn.addEventListener('click', () => {
+            const isLight = document.body.classList.toggle('light-mode');
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            themeBtn.innerHTML = isLight ? '<i class="fa-solid fa-moon"></i>' : '<i class="fa-solid fa-sun"></i>';
+        });
+    }
 
     sourceStatusBtn.addEventListener('click', () => {
         const willOpen = sourceStatusPanel.classList.contains('hide');

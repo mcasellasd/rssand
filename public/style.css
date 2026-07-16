@@ -19,6 +19,57 @@
     --font-body: 'Inter', sans-serif;
 }
 
+/* LIGHT MODE OVERRIDES */
+body.light-mode {
+    --bg-dark: #f8fafc;
+    --card-bg: rgba(255, 255, 255, 0.85);
+    --card-border: rgba(15, 23, 42, 0.12);
+    --text-primary: #0f172a;
+    --text-secondary: #334155;
+    --text-muted: #64748b;
+    --accent-blue-glow: rgba(59, 130, 246, 0.15);
+}
+
+body.light-mode .blob {
+    opacity: 0.12;
+}
+
+body.light-mode .news-title a,
+body.light-mode h1,
+body.light-mode h2,
+body.light-mode h3 {
+    color: #0f172a;
+}
+
+body.light-mode .news-card:hover .news-title a {
+    color: var(--accent-blue);
+}
+
+body.light-mode .glass-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+}
+
+body.light-mode .tab-btn {
+    color: #64748b;
+}
+
+body.light-mode .tab-btn.active {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--accent-blue);
+}
+
+body.light-mode .search-box {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+}
+
+body.light-mode #search-input {
+    color: #1e293b;
+}
+
 /* RESET & BASE STYLES */
 * {
     box-sizing: border-box;
@@ -575,6 +626,29 @@ body {
 
 .btn-refresh:active {
     transform: translateY(0);
+}
+
+.btn-theme-toggle {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    color: var(--text-primary);
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 1.1rem;
+    margin-left: 0.5rem;
+}
+
+.btn-theme-toggle:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px var(--accent-blue-glow);
 }
 
 .btn-refresh i.spin {
