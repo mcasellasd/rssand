@@ -51,9 +51,9 @@
 
         <section id="subscribe-panel" class="subscribe-panel glass-card hide" aria-live="polite">
             <div class="subscribe-copy">
-                <span class="eyebrow"><i class="fa-solid fa-rss"></i> Subscripció sense dades personals</span>
+                <span class="eyebrow"><i class="fa-solid fa-paper-plane"></i> Subscripció personalitzada</span>
                 <h2>Rep només les novetats que t’interessen</h2>
-                <p>Crea un canal RSS jurídic personalitzat i afegeix-lo al teu lector habitual. S’actualitza automàticament quan hi ha noves publicacions oficials.</p>
+                <p>Tria l’àrea jurídica i rep una selecció útil per al despatx. Pots utilitzar el correu, quan estigui activat, o un canal RSS sense facilitar dades personals.</p>
             </div>
             <div class="subscribe-builder">
                 <label for="subscribe-area">
@@ -66,6 +66,20 @@
                     <input id="subscribe-high-only" type="checkbox">
                     <span>Només impacte jurídic alt</span>
                 </label>
+                <form id="email-subscribe-form" class="email-subscribe-form hide" novalidate>
+                    <label for="subscribe-email">
+                        Correu professional
+                        <input id="subscribe-email" name="email" type="email" autocomplete="email" placeholder="nom@despatx.ad" maxlength="254" required>
+                    </label>
+                    <input id="subscribe-website" name="website" class="subscription-honeypot" type="text" tabindex="-1" autocomplete="off" aria-hidden="true">
+                    <label class="subscribe-checkbox" for="subscribe-consent">
+                        <input id="subscribe-consent" type="checkbox" required>
+                        <span>Accepto la <a id="subscribe-privacy-link" href="#" target="_blank" rel="noopener noreferrer">política de privacitat</a> i l’enviament d’un correu de confirmació.</span>
+                    </label>
+                    <button id="btn-email-subscribe" type="submit"><i class="fa-regular fa-envelope"></i> Subscriu-m’hi per correu</button>
+                </form>
+                <p id="email-subscribe-unavailable" class="email-subscribe-unavailable">La subscripció per correu s’activarà quan el servei de doble confirmació estigui configurat. Mentrestant, utilitza el canal RSS.</p>
+                <div class="subscribe-divider"><span>Canal RSS</span></div>
                 <div class="subscribe-url-row">
                     <input id="subscribe-feed-url" type="text" readonly aria-label="URL del canal RSS personalitzat">
                     <button id="btn-copy-feed" type="button"><i class="fa-regular fa-copy"></i> Copia</button>
@@ -121,6 +135,12 @@
             <div class="tabs-scroll-container">
                 <button class="tab-btn active" data-tab="all">
                     <i class="fa-solid fa-layer-group"></i> Tot
+                </button>
+                <button class="tab-btn" data-tab="new">
+                    <i class="fa-solid fa-bell"></i> Noves <span id="new-items-count" class="tab-count hide">0</span>
+                </button>
+                <button class="tab-btn" data-tab="saved">
+                    <i class="fa-solid fa-bookmark"></i> Pendents <span id="saved-items-count" class="tab-count hide">0</span>
                 </button>
                 <button class="tab-btn" data-tab="consell_noticies">
                     <i class="fa-solid fa-landmark"></i> Consell General
@@ -342,6 +362,7 @@
             <p class="technical-info">Dades obtingudes dels portals del Consell General, Govern d'Andorra, APDA, AndorraUE, AFA i BOPA.</p>
         </footer>
     </div>
+    <script src="state.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

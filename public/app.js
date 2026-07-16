@@ -1,5 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     const PRACTICE_AREA_PREFERENCE_KEY = 'andorraLegalBriefPracticeArea';
+    const KNOWN_ITEMS_KEY = 'andorraLegalBriefKnownItems';
+    const SAVED_ITEMS_KEY = 'andorraLegalBriefSavedItems';
+    const stateTools = window.LegalBriefState;
     function readPracticeAreaPreference() {
         try {
             return localStorage.getItem(PRACTICE_AREA_PREFERENCE_KEY) || 'all';
@@ -21,6 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let searchQuery = '';
     let currentPracticeArea = readPracticeAreaPreference();
     let isLegalFilterStrict = true;
+    let newItemLinks = new Set();
+    let savedItems = [];
+    let visitTrackingInitialized = false;
 
     // DOM ELEMENTS
     const feedSkeletons = document.getElementById('feed-skeletons');
@@ -45,10 +51,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const copyFeedBtn = document.getElementById('btn-copy-feed');
     const openFeedBtn = document.getElementById('btn-open-feed');
     const subscribeFeedback = document.getElementById('subscribe-feedback');
+    const emailSubscribeForm = document.getElementById('email-subscribe-form');
+    const emailSubscribeUnavailable = document.getElementById('email-subscribe-unavailable');
+    const subscribeEmail = document.getElementById('subscribe-email');
+    const subscribeWebsite = document.getElementById('subscribe-website');
+    const subscribeConsent = document.getElementById('subscribe-consent');
+    const subscribePrivacyLink = document.getElementById('subscribe-privacy-link');
+    const emailSubscribeBtn = document.getElementById('btn-email-subscribe');
     
     const refreshBtn = document.getElementById('btn-refresh');
     const resetFiltersBtn = document.getElementById('btn-reset-filters');
     const tabs = document.querySelectorAll('.tab-btn');
+    const newItemsCount = document.getElementById('new-items-count');
+    const savedItemsCount = document.getElementById('saved-items-count');
 
     // AI SUMMARY DOM ELEMENTS
     const btnAiSummary = document.getElementById('btn-ai-summary');
@@ -131,6 +146,55 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function readStoredArray(key) {
+        try {
+            return stateTools.parseArray(localStorage.getItem(key));
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function writeStoredArray(key, value) {
+        try {
+            localStorage.setItem(key, JSON.stringify(value));
+        } catch (error) {
+            // The feed remains usable when browser storage is unavailable.
+        }
+    }
+
+    function updateTrackingCounts() {
+        newItemsCount.textContent = String(newItemLinks.size);
+        newItemsCount.classList.toggle('hide', newItemLinks.size === 0);
+        savedItemsCount.textContent = String(savedItems.length);
+        savedItemsCount.classList.toggle('hide', savedItems.length === 0);
+    }
+
+    function initializeVisitTracking(items) {
+        let hasBaseline = false;
+        try {
+            hasBaseline = localStorage.getItem(KNOWN_ITEMS_KEY) !== null;
+        } catch (error) {
+            hasBaseline = false;
+        }
+        const knownLinks = readStoredArray(KNOWN_ITEMS_KEY);
+        const detectedLinks = stateTools.findNewLinks(items, knownLinks, hasBaseline);
+        newItemLinks = new Set([
+            ...(visitTrackingInitialized ? newItemLinks : []),
+            ...detectedLinks
+        ]);
+        writeStoredArray(KNOWN_ITEMS_KEY, stateTools.uniqueLinks([...items, ...knownLinks], 800));
+        savedItems = stateTools.normalizeSavedItems(readStoredArray(SAVED_ITEMS_KEY));
+        visitTrackingInitialized = true;
+        updateTrackingCounts();
+    }
+
+    function toggleSaved(item) {
+        savedItems = stateTools.toggleSavedItem(savedItems, item);
+        writeStoredArray(SAVED_ITEMS_KEY, savedItems);
+        updateTrackingCounts();
+        applyFiltersAndRender();
+    }
+
     // FETCH NEWS DATA FROM SERVER
     async function loadNewsFeed(bypassCache = false) {
         showLoadingState();
@@ -141,6 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const data = await response.json();
             allNewsItems = data.items || [];
+            initializeVisitTracking(allNewsItems);
             populatePracticeAreas();
             
             // Update cache status badge
@@ -214,6 +279,21 @@ document.addEventListener('DOMContentLoaded', () => {
         subscribeFeedback.textContent = allNewsItems.length
             ? `${Math.min(matchingItems.length, 75)} publicacions disponibles ara en aquest canal.`
             : '';
+    }
+
+    async function loadSubscriptionConfig() {
+        try {
+            const response = await fetch('/api/subscriptions/config');
+            if (!response.ok) return;
+            const config = await response.json();
+            if (config.emailEnabled && config.privacyUrl) {
+                subscribePrivacyLink.href = config.privacyUrl;
+                emailSubscribeForm.classList.remove('hide');
+                emailSubscribeUnavailable.classList.add('hide');
+            }
+        } catch (error) {
+            // RSS remains available when the email provider is not configured.
+        }
     }
 
     function updateSourceStatus(sources) {
@@ -320,8 +400,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Filter by tab
-        let filtered = allNewsItems;
-        if (currentTab === 'tramitacio') {
+        let filtered = currentTab === 'saved' ? savedItems : allNewsItems;
+        if (currentTab === 'new') {
+            filtered = filtered.filter(item => newItemLinks.has(item.link));
+        } else if (currentTab === 'tramitacio') {
             const legislativeProcessKeywords = [
                 'projecte de llei', 'proposició de llei', 'proposta de reglament',
                 'tràmit parlamentari', 'tramitació', 'modificació del codi',
@@ -331,19 +413,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const text = `${item.title || ''} ${item.category || ''}`.toLowerCase();
                 return legislativeProcessKeywords.some(keyword => text.includes(keyword));
             });
-        } else if (currentTab !== 'all') {
+        } else if (!['all', 'saved'].includes(currentTab)) {
             filtered = filtered.filter(item => item.sourceId === currentTab);
         }
 
         // Default professional view: omit institutional or informative items
         // without a concrete legal or regulatory signal.
-        if (isLegalFilterStrict) {
+        if (isLegalFilterStrict && currentTab !== 'saved') {
             filtered = filtered.filter(item => {
                 return item.isLegislative !== false && item.legalRelevance !== 'low';
             });
         }
 
-        if (currentPracticeArea !== 'all') {
+        if (currentPracticeArea !== 'all' && currentTab !== 'saved') {
             filtered = filtered.filter(item => item.practiceArea === currentPracticeArea);
         }
 
@@ -372,8 +454,16 @@ document.addEventListener('DOMContentLoaded', () => {
             feedGrid.classList.add('hide');
             feedEmpty.classList.remove('hide');
             // reset title/text to default empty
-            feedEmpty.querySelector('h2').textContent = "No s'han trobat notícies";
-            feedEmpty.querySelector('p').textContent = "No hi ha elements que coincideixin amb els filtres actius o la cerca especificada.";
+            if (currentTab === 'new') {
+                feedEmpty.querySelector('h2').textContent = 'Estàs al dia';
+                feedEmpty.querySelector('p').textContent = 'No hi ha publicacions noves des de la visita anterior.';
+            } else if (currentTab === 'saved') {
+                feedEmpty.querySelector('h2').textContent = 'Cap lectura pendent';
+                feedEmpty.querySelector('p').textContent = 'Desa les publicacions que vulguis revisar i les trobaràs aquí.';
+            } else {
+                feedEmpty.querySelector('h2').textContent = "No s'han trobat notícies";
+                feedEmpty.querySelector('p').textContent = "No hi ha elements que coincideixin amb els filtres actius o la cerca especificada.";
+            }
         } else {
             feedEmpty.classList.add('hide');
             feedGrid.innerHTML = '';
@@ -399,10 +489,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const safeLink = safeExternalUrl(item.link);
         const relevanceLabel = item.legalRelevance === 'high' ? 'Impacte jurídic alt' : 'Seguiment';
         const relevanceClass = item.legalRelevance === 'high' ? 'relevance-high' : 'relevance-medium';
+        const isNew = newItemLinks.has(item.link);
+        const isSaved = savedItems.some(saved => saved.link === item.link);
+        const newIndicatorHtml = isNew
+            ? '<span class="new-item-indicator"><i class="fa-solid fa-sparkles"></i> Nova</span>'
+            : '';
         const entryIntoForceHtml = item.entryIntoForce ? `
             <div class="entry-into-force">
                 <i class="fa-solid fa-calendar-check"></i>
                 <span><strong>Entrada en vigor:</strong> ${escapeHtml(item.entryIntoForce)}</span>
+            </div>
+        ` : '';
+        const professionalReviewHtml = item.professionalAction ? `
+            <div class="professional-review">
+                <div><i class="fa-solid fa-user-tie"></i><span><strong>Pot interessar a:</strong> ${escapeHtml(item.affectedProfiles || 'professionals de l’àrea')}</span></div>
+                <div><i class="fa-solid fa-list-check"></i><span><strong>Què cal revisar:</strong> ${escapeHtml(item.professionalAction)}</span></div>
             </div>
         ` : '';
 
@@ -420,9 +521,12 @@ document.addEventListener('DOMContentLoaded', () => {
         card.innerHTML = `
             <div>
                 <div class="card-header-meta">
-                    <span class="source-badge ${badgeClass}">
-                        <i class="fa-solid ${sourceIcon}"></i> ${escapeHtml(sourceName)}
-                    </span>
+                    <div class="card-source-group">
+                        <span class="source-badge ${badgeClass}">
+                            <i class="fa-solid ${sourceIcon}"></i> ${escapeHtml(sourceName)}
+                        </span>
+                        ${newIndicatorHtml}
+                    </div>
                     <span class="news-date">
                         <i class="fa-regular fa-calendar"></i> ${displayDate}
                     </span>
@@ -436,6 +540,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${entryIntoForceHtml}
                 
                 <p class="news-snippet">${escapeHtml(item.snippet || "Sense descripció disponible. Obriu la font oficial per consultar el contingut complet.")}</p>
+                ${professionalReviewHtml}
             </div>
             
             <div class="card-footer">
@@ -444,10 +549,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         <i class="fa-solid fa-file-lines"></i> ${escapeHtml(item.documentType || "Actualitat oficial")}
                     </span>
                     <span class="practice-area-tag"><i class="fa-solid fa-briefcase"></i> ${escapeHtml(item.practiceArea || "General")}</span>
+                    <span class="legal-stage-tag"><i class="fa-solid fa-gavel"></i> ${escapeHtml(item.legalStage || "Seguiment")}</span>
                     <span class="relevance-tag ${relevanceClass}">${relevanceLabel}</span>
                 </div>
                 
                 <div class="card-actions">
+                    <button class="btn-action-text btn-save ${isSaved ? 'is-saved' : ''}" type="button" aria-pressed="${isSaved}" title="${isSaved ? 'Treure de pendents' : 'Desar per revisar'}">
+                        <i class="${isSaved ? 'fa-solid' : 'fa-regular'} fa-bookmark"></i> ${isSaved ? 'Desat' : 'Desar'}
+                    </button>
                     <button class="btn-action-text btn-expand" title="Ampliar descripció">
                         <i class="fa-solid fa-circle-chevron-down"></i> Ampliar
                     </button>
@@ -457,6 +566,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
         `;
+
+        card.querySelector('.btn-save').addEventListener('click', () => toggleSaved(item));
 
         // Expand/Collapse event listener
         const expandBtn = card.querySelector('.btn-expand');
@@ -505,6 +616,37 @@ document.addEventListener('DOMContentLoaded', () => {
             document.execCommand('copy');
         }
         subscribeFeedback.textContent = 'Enllaç copiat. Enganxa’l al teu lector RSS.';
+    });
+
+    emailSubscribeForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        emailSubscribeBtn.disabled = true;
+        emailSubscribeBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrant...';
+        subscribeFeedback.textContent = '';
+        subscribeFeedback.classList.remove('is-error');
+        try {
+            const response = await fetch('/api/subscriptions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: subscribeEmail.value,
+                    website: subscribeWebsite.value,
+                    consent: subscribeConsent.checked,
+                    practiceArea: subscribeArea.value || 'all',
+                    relevance: subscribeHighOnly.checked ? 'high' : 'all'
+                })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'No s’ha pogut registrar la subscripció.');
+            emailSubscribeForm.reset();
+            subscribeFeedback.textContent = data.message || 'Revisa el correu i confirma la subscripció.';
+        } catch (error) {
+            subscribeFeedback.textContent = error.message;
+            subscribeFeedback.classList.add('is-error');
+        } finally {
+            emailSubscribeBtn.disabled = false;
+            emailSubscribeBtn.innerHTML = '<i class="fa-regular fa-envelope"></i> Subscriu-m’hi per correu';
+        }
     });
 
     // Reset filters empty state button
@@ -813,4 +955,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // INITIAL LOAD
     loadNewsFeed();
+    loadSubscriptionConfig();
 });

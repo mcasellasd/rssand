@@ -11,6 +11,7 @@ const ai = process.env.GEMINI_API_KEY && process.env.DISABLE_AI !== 'true'
 
 const app = express();
 app.set('trust proxy', 1);
+app.use(express.json({ limit: '16kb' }));
 const PORT = process.env.PORT || 3000;
 
 // In-memory cache for news feed data
@@ -21,9 +22,82 @@ const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
 
 // Cache summaries independently for each practice-area edition.
 const aiSummaryCache = new Map();
+const subscriptionAttempts = new Map();
+const SUBSCRIPTION_RATE_WINDOW = 60 * 60 * 1000;
+const SUBSCRIPTION_RATE_LIMIT = 5;
 
 const BOPA_API_BASE = 'https://bopaazurefunctions.azurewebsites.net';
 const BOPA_DOCUMENTS_ENDPOINT = `${BOPA_API_BASE}/api/GetDocumentsByBOPA?code=g0LIbgotqEe94pypk8MWNTWr3ldcgMQ70o0fSarhINWwAzFuCnk3Lg==`;
+const LEGAL_PRACTICE_AREAS = [
+  'Penal i seguretat',
+  'Laboral i immigració',
+  'Fiscal i duaner',
+  'Mercantil i societari',
+  'Habitatge i urbanisme',
+  'Administratiu i contractació pública',
+  'Protecció de dades i digital',
+  'Financer i assegurances',
+  'Unió Europea i internacional',
+  'Justícia i procediment',
+  'Família i persona',
+  'Salut i professions regulades',
+  'Educació',
+  'General i institucional'
+];
+
+function getEmailSubscriptionConfig() {
+  const webhookUrl = (process.env.SUBSCRIPTION_WEBHOOK_URL || '').trim();
+  const privacyUrl = (process.env.PRIVACY_POLICY_URL || '').trim();
+  const isAllowedUrl = (value, allowLocalhost = false) => {
+    try {
+      const url = new URL(value);
+      return url.protocol === 'https:' || (allowLocalhost && url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname));
+    } catch (error) {
+      return false;
+    }
+  };
+
+  return {
+    enabled: isAllowedUrl(webhookUrl, process.env.NODE_ENV !== 'production') && isAllowedUrl(privacyUrl),
+    webhookUrl,
+    privacyUrl: isAllowedUrl(privacyUrl) ? privacyUrl : null
+  };
+}
+
+function normalizeSubscriptionRequest(body = {}) {
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const practiceArea = typeof body.practiceArea === 'string' && body.practiceArea.trim()
+    ? body.practiceArea.trim()
+    : 'all';
+  const relevance = body.relevance === 'high' ? 'high' : 'all';
+
+  if (body.website) return { isBot: true };
+  if (body.consent !== true) throw new Error('Cal acceptar la política de privacitat.');
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error('Introdueix una adreça electrònica vàlida.');
+  }
+  if (practiceArea !== 'all' && !LEGAL_PRACTICE_AREAS.includes(practiceArea)) {
+    throw new Error('Àrea de pràctica no reconeguda.');
+  }
+
+  return { email, practiceArea, relevance, isBot: false };
+}
+
+function checkSubscriptionRateLimit(ip) {
+  const now = Date.now();
+  if (subscriptionAttempts.size > 1000) {
+    for (const [key, attempts] of subscriptionAttempts) {
+      if (!attempts.some(timestamp => now - timestamp < SUBSCRIPTION_RATE_WINDOW)) {
+        subscriptionAttempts.delete(key);
+      }
+    }
+  }
+  const recentAttempts = (subscriptionAttempts.get(ip) || []).filter(timestamp => now - timestamp < SUBSCRIPTION_RATE_WINDOW);
+  if (recentAttempts.length >= SUBSCRIPTION_RATE_LIMIT) return false;
+  recentAttempts.push(now);
+  subscriptionAttempts.set(ip, recentAttempts);
+  return true;
+}
 
 // Map Catalan month names to numbers (0-11)
 const CATALAN_MONTHS = {
@@ -121,7 +195,12 @@ function buildLegalRss(items, generatedAt, options = {}) {
       <category>${escapeXml(item.documentType || 'Actualitat oficial')}</category>
       <category>${escapeXml(item.practiceArea || 'General i institucional')}</category>
       <source url="${escapeXml(item.link)}">${escapeXml(item.source || 'Font oficial')}</source>
-      <description>${escapeXml(item.snippet || 'Consulteu la publicació oficial.')}</description>
+      <description>${escapeXml([
+        item.snippet || 'Consulteu la publicació oficial.',
+        item.affectedProfiles ? `Pot interessar a: ${item.affectedProfiles}.` : null,
+        item.professionalAction ? `Revisió suggerida: ${item.professionalAction}` : null,
+        item.entryIntoForce ? `Entrada en vigor indicada al document: ${item.entryIntoForce}` : null
+      ].filter(Boolean).join(' '))}</description>
     </item>
   `).join('');
 
@@ -246,8 +325,8 @@ function buildDeterministicSummary(weeklyNews, newsForPrompt, reason = null, pra
       titol: item.title,
       link: item.link,
       impacte: item.entryIntoForce
-        ? `Publicació oficial de tipus ${item.documentType} en l’àrea ${item.practiceArea}. El text inclou una clàusula explícita d’entrada en vigor que convé comprovar a la font.`
-        : `Publicació oficial de tipus ${item.documentType} en l’àrea ${item.practiceArea}. Convé revisar el text oficial per determinar-ne l’abast aplicable.`
+        ? `${item.professionalAction} El text inclou una clàusula explícita d’entrada en vigor que convé comprovar a la font.`
+        : item.professionalAction
     }))
   };
 }
@@ -303,6 +382,88 @@ function getPracticeArea(item = {}) {
   ];
   const match = areas.find(([, keywords]) => keywords.some(keyword => text.includes(keyword)));
   return match ? match[0] : 'General i institucional';
+}
+
+function getProfessionalReview(item = {}) {
+  const documentType = item.documentType || getDocumentType(item.title, item.category);
+  const practiceArea = item.practiceArea || getPracticeArea(item);
+  const affectedProfilesByArea = {
+    'Penal i seguretat': 'Despatxos penalistes, compliance i clients sotmesos a obligacions de prevenció',
+    'Laboral i immigració': 'Empreses ocupadores, treballadors i assessoria laboral o migratòria',
+    'Fiscal i duaner': 'Contribuents, empreses, assessoria fiscal i operadors duaners',
+    'Mercantil i societari': 'Societats, administradors, emprenedors i assessoria mercantil',
+    'Habitatge i urbanisme': 'Propietaris, arrendataris, promotors i professionals immobiliaris',
+    'Administratiu i contractació pública': 'Administracions, licitadors, concessionaris i empleats públics',
+    'Protecció de dades i digital': 'Responsables i encarregats del tractament, DPO i proveïdors digitals',
+    'Financer i assegurances': 'Entitats supervisades, intermediaris, asseguradores i funcions de compliance',
+    'Unió Europea i internacional': 'Empreses amb activitat transfronterera i assessoria internacional',
+    'Justícia i procediment': 'Professionals litigadors i parts en procediments judicials',
+    'Família i persona': 'Persones, famílies i professionals de dret civil i de família',
+    'Salut i professions regulades': 'Professionals sanitaris, centres i col·legis professionals',
+    'Educació': 'Centres educatius, docents, alumnat i administracions competents',
+    'General i institucional': 'Professionals que segueixen l’activitat normativa i institucional andorrana'
+  };
+
+  const reviewByType = {
+    'Projecte de llei': {
+      legalStage: 'En tramitació',
+      professionalAction: 'Monitorar les esmenes i el text final; no tractar el projecte com a dret vigent.'
+    },
+    'Proposició de llei': {
+      legalStage: 'En tramitació',
+      professionalAction: 'Monitorar l’admissió, les esmenes i el text final; encara no és dret vigent.'
+    },
+    'Aprovació parlamentària': {
+      legalStage: 'Aprovació parlamentària',
+      professionalAction: 'Comprovar la publicació al BOPA, el text definitiu i la data d’entrada en vigor.'
+    },
+    'Llei': {
+      legalStage: item.officialDocument ? 'Publicat al BOPA' : 'Seguiment normatiu',
+      professionalAction: 'Revisar l’àmbit d’aplicació, les disposicions transitòries i finals i l’entrada en vigor.'
+    },
+    'Reglament': {
+      legalStage: item.officialDocument ? 'Publicat al BOPA' : 'Seguiment normatiu',
+      professionalAction: 'Revisar les obligacions operatives, els terminis d’adaptació i l’entrada en vigor.'
+    },
+    'Decret': {
+      legalStage: item.officialDocument ? 'Publicat al BOPA' : 'Seguiment normatiu',
+      professionalAction: 'Identificar destinataris, efectes, terminis i règim transitori al text oficial.'
+    },
+    'Resolució': {
+      legalStage: item.officialDocument ? 'Publicació oficial' : 'Seguiment administratiu',
+      professionalAction: 'Comprovar destinataris, efectes, terminis i vies de recurs que constin a la resolució.'
+    },
+    'Sentència / Aute': {
+      legalStage: 'Resolució judicial',
+      professionalAction: 'Revisar els fets, la fonamentació, l’abast del criteri i si la resolució és ferma.'
+    },
+    'Edicte': {
+      legalStage: 'Publicació oficial',
+      professionalAction: 'Comprovar l’objecte, les persones afectades i qualsevol termini d’actuació o recurs.'
+    },
+    'Avís': {
+      legalStage: 'Avís oficial',
+      professionalAction: 'Verificar si l’avís obre, modifica o tanca algun termini rellevant.'
+    },
+    'Informe': {
+      legalStage: 'Criteri o informació institucional',
+      professionalAction: 'Valorar el criteri institucional i distingir-lo de les normes jurídicament vinculants.'
+    },
+    'Comunicat': {
+      legalStage: 'Informació institucional',
+      professionalAction: 'Fer-ne seguiment i confirmar qualsevol efecte jurídic en la norma o resolució oficial corresponent.'
+    },
+    'Actualitat oficial': {
+      legalStage: 'Seguiment institucional',
+      professionalAction: 'Contrastar l’anunci amb el text normatiu o resolutiu oficial abans d’actuar.'
+    }
+  };
+
+  return {
+    legalStage: (reviewByType[documentType] || reviewByType['Actualitat oficial']).legalStage,
+    professionalAction: (reviewByType[documentType] || reviewByType['Actualitat oficial']).professionalAction,
+    affectedProfiles: affectedProfilesByArea[practiceArea] || affectedProfilesByArea['General i institucional']
+  };
 }
 
 async function getBopaEntryIntoForce(documentUrl) {
@@ -751,6 +912,7 @@ async function fetchAllFeeds() {
     item.legalRelevance = item.legalRelevance || getLegalRelevance(item.title, item.category);
     item.documentType = item.documentType || getDocumentType(item.title, item.category);
     item.practiceArea = item.practiceArea || getPracticeArea(item);
+    Object.assign(item, getProfessionalReview(item));
     return true;
   });
 
@@ -806,6 +968,63 @@ app.get('/api/health', (req, res) => {
     totalSources,
     sources: sourceHealthCache
   });
+});
+
+app.get('/api/subscriptions/config', (req, res) => {
+  const config = getEmailSubscriptionConfig();
+  res.set('Cache-Control', 'public, max-age=300');
+  res.json({
+    emailEnabled: config.enabled,
+    privacyUrl: config.privacyUrl
+  });
+});
+
+app.post('/api/subscriptions', async (req, res) => {
+  const config = getEmailSubscriptionConfig();
+  if (!config.enabled) {
+    return res.status(503).json({ error: 'La subscripció per correu encara no està activada.' });
+  }
+  if (!checkSubscriptionRateLimit(req.ip || 'unknown')) {
+    return res.status(429).json({ error: 'S’han fet massa intents. Torna-ho a provar més tard.' });
+  }
+
+  let subscription;
+  try {
+    subscription = normalizeSubscriptionRequest(req.body);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  // Honeypot submissions receive a neutral response without reaching the provider.
+  if (subscription.isBot) return res.status(201).json({ accepted: true });
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (process.env.SUBSCRIPTION_WEBHOOK_TOKEN) {
+      headers.Authorization = `Bearer ${process.env.SUBSCRIPTION_WEBHOOK_TOKEN}`;
+    }
+    const response = await fetch(config.webhookUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email: subscription.email,
+        practiceArea: subscription.practiceArea === 'all' ? null : subscription.practiceArea,
+        relevance: subscription.relevance,
+        locale: 'ca-AD',
+        source: 'andorra-legal-brief-web',
+        doubleOptInRequested: true,
+        subscribedAt: new Date().toISOString()
+      }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) throw new Error(`Subscription provider returned ${response.status}`);
+    res.status(201).json({
+      accepted: true,
+      message: 'Revisa el correu i confirma la subscripció.'
+    });
+  } catch (error) {
+    console.error('Subscription provider unavailable:', error.message);
+    res.status(502).json({ error: 'No s’ha pogut registrar la subscripció. Torna-ho a provar més tard.' });
+  }
 });
 
 app.get('/feed.xml', async (req, res) => {
@@ -1088,7 +1307,7 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
                 ${escapeHtml(sourceName)}
               </span>
               <span class="category" style="color: #64748b; font-size: 12px; margin-left: 10px; font-family: 'Inter', sans-serif;">
-                • ${escapeHtml(documentType)} · ${escapeHtml(practiceArea)}
+                • ${escapeHtml(documentType)} · ${escapeHtml(practiceArea)} · ${escapeHtml(orig.legalStage || 'Seguiment')}
               </span>
             </td>
           </tr>
@@ -1104,6 +1323,10 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
         ${orig.entryIntoForce ? `
         <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; line-height: 1.45; font-family: 'Inter', sans-serif;">
           <strong>Entrada en vigor:</strong> ${escapeHtml(orig.entryIntoForce)}
+        </div>` : ''}
+        ${orig.affectedProfiles ? `
+        <div style="color: #475569; font-size: 13px; line-height: 1.45; margin: 0 0 12px 0; font-family: 'Inter', sans-serif;">
+          <strong>Pot interessar a:</strong> ${escapeHtml(orig.affectedProfiles)}
         </div>` : ''}
         <div class="impact-section" style="background-color: #f8fafc; border-left: 3px solid #3b82f6; padding: 10px 15px; border-radius: 0 8px 8px 0; margin-top: 10px;">
           <p style="margin: 0; font-size: 13px; font-style: italic; color: #1e293b; font-family: 'Inter', sans-serif; font-weight: 500;">
@@ -1210,14 +1433,20 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
 }
 
 // Generate Plain Text Fallback Version of the Newsletter
-function generateNewsletterText(dateStr, editorialIntro, puntsClau, noticiesAmbImpacte, editorialMode, practiceArea = 'all') {
+function generateNewsletterText(dateStr, editorialIntro, puntsClau, noticiesAmbImpacte, allNewsItems, editorialMode, practiceArea = 'all') {
   const dateFormatted = parseDateToCatalan(dateStr);
   const methodLabel = editorialMode === 'ai'
     ? 'Edició assistida per IA sobre fonts oficials'
     : 'Síntesi automàtica de fonts oficials';
   const pointsText = puntsClau.map(pt => `• ${pt}`).join('\n');
   const articlesText = noticiesAmbImpacte.map((ai, idx) => {
-    return `${idx + 1}. ${ai.titol}\n   Enllaç: ${ai.link}\n   Per què convé revisar-ho: ${ai.impacte}\n`;
+    const original = allNewsItems.find(item => item.link === ai.link || item.title === ai.titol) || {};
+    return `${idx + 1}. ${ai.titol}
+   Fase: ${original.legalStage || 'Seguiment'}
+   Pot interessar a: ${original.affectedProfiles || 'Professionals de l’àrea'}
+   Enllaç: ${ai.link}
+   Per què convé revisar-ho: ${ai.impacte}
+`;
   }).join('\n');
 
   return `ANDORRA LEGAL BRIEF - Novetats per a la pràctica jurídica
@@ -1296,6 +1525,7 @@ app.get('/api/news/newsletter', async (req, res) => {
       newsletterData.editorialIntro,
       newsletterData.puntsClau,
       newsletterData.noticiesAmbImpacte,
+      weeklyNews,
       newsletterData.editorialMode,
       practiceArea
     );
@@ -1334,5 +1564,9 @@ if (require.main === module) {
 
 module.exports = {
   app,
-  buildLegalRss
+  buildLegalRss,
+  getProfessionalReview,
+  normalizeSubscriptionRequest,
+  getEmailSubscriptionConfig,
+  generateNewsletterText
 };
