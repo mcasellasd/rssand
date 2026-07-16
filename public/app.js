@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const aiKeyPoints = document.getElementById('ai-key-points');
     const aiSectors = document.getElementById('ai-sectors');
     const aiSummaryDate = document.getElementById('ai-summary-date');
+    const aiSummaryMethod = document.getElementById('ai-summary-method');
 
     // NEWSLETTER DOM ELEMENTS
     const btnGenerateNewsletter = document.getElementById('btn-generate-newsletter');
@@ -516,8 +517,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const div = document.createElement('div');
                     div.className = 'ai-sector-item';
                     div.innerHTML = `
-                        <span class="ai-sector-name">${sec.nom}</span>
-                        <span class="ai-sector-desc">${sec.explicacio}</span>
+                        <span class="ai-sector-name">${escapeHtml(sec.nom)}</span>
+                        <span class="ai-sector-desc">${escapeHtml(sec.explicacio)}</span>
                     `;
                     aiSectors.appendChild(div);
                 });
@@ -534,6 +535,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 minute: '2-digit'
             });
             aiSummaryDate.innerHTML = `<i class="fa-regular fa-clock"></i> Resum del darrer període. Generat el ${dateText}`;
+            aiSummaryMethod.innerHTML = data.editorialMode === 'ai'
+                ? `<i class="fa-solid fa-wand-magic-sparkles"></i> Edició assistida per IA sobre fonts oficials`
+                : `<i class="fa-solid fa-shield-halved"></i> Síntesi automàtica de fonts oficials`;
+            aiSummaryMethod.title = data.editorialNote || '';
 
             // Show content, hide loading
             aiLoading.classList.add('hide');
@@ -541,7 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Reset button state
             btnAiSummary.disabled = false;
-            btnAiSummary.innerHTML = `<i class="fa-solid fa-rotate"></i> Regenerar Resum`;
+            btnAiSummary.innerHTML = `<i class="fa-solid fa-rotate"></i> Actualitzar brief`;
 
         } catch (error) {
             console.error('Error al generar el resum amb IA:', error);

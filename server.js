@@ -5,7 +5,9 @@ const https = require('https');
 const path = require('path');
 const { GoogleGenAI } = require('@google/genai');
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = process.env.GEMINI_API_KEY && process.env.DISABLE_AI !== 'true'
+  ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+  : null;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -191,6 +193,77 @@ function selectEditorialItems(items, limit = 24) {
     round += 1;
   }
   return selected;
+}
+
+function buildDeterministicSummary(weeklyNews, newsForPrompt, reason = null) {
+  const countBy = field => weeklyNews.reduce((counts, item) => {
+    const value = item[field] || 'General';
+    counts[value] = (counts[value] || 0) + 1;
+    return counts;
+  }, {});
+  const topEntries = counts => Object.entries(counts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ca'));
+  const topAreas = topEntries(countBy('practiceArea')).slice(0, 4);
+  const topTypes = topEntries(countBy('documentType')).slice(0, 3);
+  const selected = selectEditorialItems(newsForPrompt, 6);
+  const areasText = topAreas.map(([name, count]) => `${name} (${count})`).join(', ');
+  const typesText = topTypes.map(([name, count]) => `${name} (${count})`).join(', ');
+
+  return {
+    timestamp: new Date().toISOString(),
+    itemsCount: weeklyNews.length,
+    sampledItemsCount: newsForPrompt.length,
+    sampledSources: [...new Set(newsForPrompt.map(item => item.sourceId))],
+    editorialMode: 'deterministic',
+    editorialNote: reason
+      ? 'Síntesi automàtica basada exclusivament en metadades oficials; la capa editorial d’IA no estava disponible.'
+      : 'Síntesi automàtica basada exclusivament en metadades oficials.',
+    resumExecutiu: `En els darrers set dies s’han identificat ${weeklyNews.length} publicacions oficials amb rellevància jurídica. Les àrees amb més activitat són ${areasText || 'les àrees generals i institucionals'}. Per tipus documental destaquen ${typesText || 'les publicacions oficials generals'}.`,
+    puntsClau: selected.map(item => item.title),
+    categoriesDestacades: topAreas.map(([nom, count]) => ({
+      nom,
+      explicacio: `${count} ${count === 1 ? 'publicació oficial classificada' : 'publicacions oficials classificades'} en aquesta àrea durant el període.`
+    })),
+    noticiesAmbImpacte: selected.map(item => ({
+      titol: item.title,
+      link: item.link,
+      impacte: item.entryIntoForce
+        ? `Publicació oficial de tipus ${item.documentType} en l’àrea ${item.practiceArea}. El text inclou una clàusula explícita d’entrada en vigor que convé comprovar a la font.`
+        : `Publicació oficial de tipus ${item.documentType} en l’àrea ${item.practiceArea}. Convé revisar el text oficial per determinar-ne l’abast aplicable.`
+    }))
+  };
+}
+
+function normalizeAiSummary(summary, newsForPrompt, fallback) {
+  if (!summary || typeof summary !== 'object') return fallback;
+  const officialByLink = new Map(newsForPrompt.map(item => [item.link, item]));
+  const officialByTitle = new Map(newsForPrompt.map(item => [item.title, item]));
+  const impactItems = Array.isArray(summary.noticiesAmbImpacte)
+    ? summary.noticiesAmbImpacte
+      .map(item => {
+        const official = officialByLink.get(item.link) || officialByTitle.get(item.titol);
+        if (!official) return null;
+        return {
+          titol: official.title,
+          link: official.link,
+          impacte: typeof item.impacte === 'string' ? item.impacte : fallback.noticiesAmbImpacte.find(entry => entry.link === official.link)?.impacte
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 6)
+    : [];
+
+  return {
+    ...fallback,
+    editorialMode: 'ai',
+    editorialNote: 'Síntesi editorial assistida per IA a partir exclusivament de les publicacions oficials seleccionades.',
+    resumExecutiu: typeof summary.resumExecutiu === 'string' ? summary.resumExecutiu : fallback.resumExecutiu,
+    // Keep these two sections strictly traceable: official titles and counted
+    // practice areas, without AI paraphrases.
+    puntsClau: fallback.puntsClau,
+    categoriesDestacades: fallback.categoriesDestacades,
+    noticiesAmbImpacte: impactItems.length ? impactItems : fallback.noticiesAmbImpacte
+  };
 }
 
 function getPracticeArea(item = {}) {
@@ -761,6 +834,8 @@ async function getAiSummary(forceRefresh = false) {
     aiSummaryCache = {
       timestamp: new Date().toISOString(),
       itemsCount: 0,
+      editorialMode: 'deterministic',
+      editorialNote: 'No hi ha publicacions suficients en el període seleccionat.',
       resumExecutiu: "No hi ha prou notícies publicades en els darrers 7 dies per generar un resum setmanal.",
       puntsClau: [],
       categoriesDestacades: [],
@@ -788,10 +863,18 @@ No inventis dates d'entrada en vigor, terminis, obligacions, efectes jurídics n
 Prioritza lleis, reglaments, decrets, resolucions, jurisprudència, iniciatives legislatives i canvis regulatoris amb impacte professional.
 Per a "noticiesAmbImpacte", selecciona fins a 6 publicacions i conserva exactament el títol i l'enllaç originals. Explica en 1 o 2 frases què convé revisar o per què pot ser rellevant per a un despatx, sense donar assessorament jurídic ni extrapolar més enllà de la font.`;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3.5-flash',
-    contents: prompt,
-    config: {
+  const fallbackSummary = buildDeterministicSummary(weeklyNews, newsForPrompt);
+  if (!ai) {
+    aiSummaryCache = buildDeterministicSummary(weeklyNews, newsForPrompt, 'missing_api_key');
+    aiSummaryTimestamp = Date.now();
+    return aiSummaryCache;
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: prompt,
+      config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: "OBJECT",
@@ -833,18 +916,15 @@ Per a "noticiesAmbImpacte", selecciona fins a 6 publicacions i conserva exactame
         },
         required: ["resumExecutiu", "puntsClau", "categoriesDestacades", "noticiesAmbImpacte"]
       }
-    }
-  });
+      }
+    });
 
-  const summaryJson = JSON.parse(response.text);
-  
-  aiSummaryCache = {
-    timestamp: new Date().toISOString(),
-    itemsCount: weeklyNews.length,
-    sampledItemsCount: newsForPrompt.length,
-    sampledSources: [...new Set(newsForPrompt.map(item => item.sourceId))],
-    ...summaryJson
-  };
+    const summaryJson = JSON.parse(response.text);
+    aiSummaryCache = normalizeAiSummary(summaryJson, newsForPrompt, fallbackSummary);
+  } catch (error) {
+    console.error('AI summary unavailable; using deterministic legal brief:', error.message);
+    aiSummaryCache = buildDeterministicSummary(weeklyNews, newsForPrompt, error.message);
+  }
   aiSummaryTimestamp = Date.now();
   return aiSummaryCache;
 }
