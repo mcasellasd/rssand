@@ -173,8 +173,6 @@ function buildLegalRss(items, generatedAt, options = {}) {
   const highRelevanceOnly = options.relevance === 'high';
   const legalItems = items
     .filter(item =>
-      item.isLegislative !== false &&
-      item.legalRelevance !== 'low' &&
       (!selectedArea || item.practiceArea === selectedArea) &&
       (!highRelevanceOnly || item.legalRelevance === 'high')
     )
@@ -237,8 +235,7 @@ function getLegalRelevance(title = '', category = '') {
   ];
 
   if (highKeywords.some(keyword => text.includes(keyword))) return 'high';
-  if (mediumKeywords.some(keyword => text.includes(keyword))) return 'medium';
-  return 'low';
+  return 'medium';
 }
 
 function getDocumentType(title = '', category = '') {
@@ -691,7 +688,7 @@ async function scrapeGovernNews() {
       const date = parseCatalanDate(dateText);
       const legalRelevance = getLegalRelevance(title, category);
 
-      if (!title || !href || !date || seen.has(link) || legalRelevance === 'low') return;
+      if (!title || !href || !date || seen.has(link)) return;
       seen.add(link);
       items.push({
         source: "Govern d'Andorra",
@@ -845,7 +842,7 @@ async function scrapeBOPANews() {
         const title = decodeBopaText(document.sumari);
         const category = document.organisme || 'Disposicions oficials';
         const legalRelevance = getLegalRelevance(title, category);
-        if (!title || !document.metadata_storage_path || legalRelevance === 'low') continue;
+        if (!title || !document.metadata_storage_path) continue;
 
         items.push({
           source: `BOPA núm. ${bulletin.numBOPA}${bulletin.isExtra ? ' extraordinari' : ''}`,
@@ -880,6 +877,66 @@ async function scrapeBOPANews() {
   }
 }
 
+// 8. Generic RSS Parser for Press Sources
+async function scrapeGenericRSS(url, sourceName, sourceId) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'AndorraLegalBrief/1.0 (+https://rssand-production.up.railway.app/)'
+      }
+    });
+    if (!response.ok) throw new Error(`HTTP error ${sourceName} RSS: ${response.status}`);
+    const xml = await response.text();
+    const $ = cheerio.load(xml, { xmlMode: true });
+    const items = [];
+
+    $('item').each((_, el) => {
+      const title = $(el).find('title').text().trim();
+      const link = $(el).find('link').text().trim();
+      const pubDate = $(el).find('pubDate').text().trim();
+      const date = parseCatalanDate(pubDate);
+      
+      let snippet = "";
+      const description = $(el).find('description').text().trim();
+      if (description) {
+        snippet = cheerio.load(description).text().replace(/\s+/g, ' ').trim();
+      }
+      
+      if (!snippet) {
+         const content = $(el).find('content\\:encoded').text().trim();
+         if (content) {
+           snippet = cheerio.load(content).text().replace(/\s+/g, ' ').trim();
+         }
+      }
+
+      if (snippet.length > 240) {
+        snippet = snippet.substring(0, 240).trim() + "...";
+      }
+
+      if (!title || !link || !date) return;
+
+      const relevance = getLegalRelevance(title, '');
+
+      items.push({
+        source: sourceName,
+        sourceId: sourceId,
+        title,
+        link,
+        date,
+        snippet,
+        category: "Premsa",
+        isLegislative: false,
+        legalRelevance: relevance
+      });
+    });
+
+    return items;
+  } catch (error) {
+    console.error(`Error fetching ${sourceName} feed:`, error.message);
+    return [];
+  }
+}
+
 // Serve Frontend Static Files
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -892,7 +949,12 @@ async function fetchAllFeeds() {
     { id: 'govern', name: "Govern d'Andorra", url: 'https://www.govern.ad/ca/actualitat', load: scrapeGovernNews },
     { id: 'andorra_ue', name: 'Andorra–UE', url: 'https://www.andorraue.ad/ca/actualitat/', load: scrapeAndorraUE },
     { id: 'afa', name: 'AFA', url: 'https://www.afa.ad', load: scrapeAFANews },
-    { id: 'bopa', name: 'BOPA', url: 'https://www.bopa.ad', load: scrapeBOPANews }
+    { id: 'bopa', name: 'BOPA', url: 'https://www.bopa.ad', load: scrapeBOPANews },
+    { id: 'bondia', name: 'Bondia', url: 'https://www.bondia.ad/rss.xml', load: () => scrapeGenericRSS('https://www.bondia.ad/rss.xml', 'Bondia', 'bondia') },
+    { id: 'elperiodic', name: 'El Periòdic', url: 'https://elperiodic.ad/feed/', load: () => scrapeGenericRSS('https://elperiodic.ad/feed/', 'El Periòdic', 'elperiodic') },
+    { id: 'andorraara', name: 'Andorra Ara', url: 'https://andorraara.com/ca/feed', load: () => scrapeGenericRSS('https://andorraara.com/ca/feed', 'Andorra Ara', 'andorraara') },
+    { id: 'altaveu', name: 'Altaveu', url: 'https://www.altaveu.com/uploads/feeds/feed_altaveu_ca.xml', load: () => scrapeGenericRSS('https://www.altaveu.com/uploads/feeds/feed_altaveu_ca.xml', 'Altaveu', 'altaveu') },
+    { id: 'digitalandorra', name: 'Digital Andorra', url: 'https://digitalandorra.com/feed/', load: () => scrapeGenericRSS('https://digitalandorra.com/feed/', 'Digital Andorra', 'digitalandorra') }
   ];
   const checkedAt = new Date().toISOString();
   const results = await Promise.allSettled(sources.map(source => source.load()));
