@@ -23,7 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentTab = 'all';
     let searchQuery = '';
     let currentPracticeArea = readPracticeAreaPreference();
-    let isLegalFilterStrict = true;
     let newItemLinks = new Set();
     let savedItems = [];
     let visitTrackingInitialized = false;
@@ -36,7 +35,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('search-input');
     const searchClearBtn = document.getElementById('search-clear-btn');
     const practiceAreaSelect = document.getElementById('practice-area-select');
-    const cgFilterToggle = document.getElementById('cg-filter-toggle');
     const bopaAlert = document.getElementById('bopa-alert');
     const cacheStatus = document.getElementById('cache-status');
     const sourceStatusBtn = document.getElementById('btn-source-status');
@@ -105,7 +103,12 @@ document.addEventListener('DOMContentLoaded', () => {
         'govern': 'badge-govern',
         'andorra_ue': 'badge-ue',
         'afa': 'badge-afa',
-        'bopa': 'badge-bopa'
+        'bopa': 'badge-bopa',
+        'bondia': 'badge-premsa',
+        'elperiodic': 'badge-premsa',
+        'andorraara': 'badge-premsa',
+        'altaveu': 'badge-premsa',
+        'digitalandorra': 'badge-premsa'
     };
 
     const sourceIcons = {
@@ -115,7 +118,12 @@ document.addEventListener('DOMContentLoaded', () => {
         'govern': 'fa-building-columns',
         'andorra_ue': 'fa-globe-europe',
         'afa': 'fa-coins',
-        'bopa': 'fa-scroll'
+        'bopa': 'fa-scroll',
+        'bondia': 'fa-newspaper',
+        'elperiodic': 'fa-newspaper',
+        'andorraara': 'fa-newspaper',
+        'altaveu': 'fa-newspaper',
+        'digitalandorra': 'fa-newspaper'
     };
 
     // FORMAT DATE (YYYY-MM-DD -> DD/MM/YYYY)
@@ -413,17 +421,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const text = `${item.title || ''} ${item.category || ''}`.toLowerCase();
                 return legislativeProcessKeywords.some(keyword => text.includes(keyword));
             });
+        } else if (currentTab === 'media') {
+            const mediaSourceIds = ['bondia', 'elperiodic', 'andorraara', 'altaveu', 'digitalandorra'];
+            filtered = filtered.filter(item => mediaSourceIds.includes(item.sourceId));
         } else if (!['all', 'saved'].includes(currentTab)) {
             filtered = filtered.filter(item => item.sourceId === currentTab);
         }
 
-        // Default professional view: omit institutional or informative items
-        // without a concrete legal or regulatory signal.
-        if (isLegalFilterStrict && currentTab !== 'saved') {
-            filtered = filtered.filter(item => {
-                return item.isLegislative !== false && item.legalRelevance !== 'low';
-            });
-        }
 
         if (currentPracticeArea !== 'all' && currentTab !== 'saved') {
             filtered = filtered.filter(item => item.practiceArea === currentPracticeArea);
@@ -663,8 +667,6 @@ document.addEventListener('DOMContentLoaded', () => {
         searchClearBtn.style.display = 'none';
         currentPracticeArea = 'all';
         practiceAreaSelect.value = 'all';
-        isLegalFilterStrict = true;
-        cgFilterToggle.checked = true;
         currentTab = 'all';
         tabs.forEach(t => {
             if (t.getAttribute('data-tab') === 'all') {
@@ -692,12 +694,6 @@ document.addEventListener('DOMContentLoaded', () => {
         searchInput.value = '';
         searchQuery = '';
         searchClearBtn.style.display = 'none';
-        applyFiltersAndRender();
-    });
-
-    // CG filter toggle slider
-    cgFilterToggle.addEventListener('change', (e) => {
-        isLegalFilterStrict = e.target.checked;
         applyFiltersAndRender();
     });
 
