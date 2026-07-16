@@ -231,6 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Source specific badge classes
         const badgeClass = sourceClassMap[item.sourceId] || 'badge-govern';
         const sourceIcon = sourceIcons[item.sourceId] || 'fa-newspaper';
+        const sourceName = item.source || 'Font oficial';
 
         const displayDate = formatDateDisplay(item.date);
 
@@ -247,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div>
                 <div class="card-header-meta">
                     <span class="source-badge ${badgeClass}">
-                        <i class="fa-solid ${sourceIcon}"></i> ${item.source}
+                        <i class="fa-solid ${sourceIcon}"></i> ${sourceName}
                     </span>
                     <span class="news-date">
                         <i class="fa-regular fa-calendar"></i> ${displayDate}

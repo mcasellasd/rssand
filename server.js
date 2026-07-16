@@ -23,6 +23,8 @@ let aiSummaryTimestamp = null;
 const PRESEEDED_NEWS = {
   govern: [
     {
+      source: "Govern d'Andorra",
+      sourceId: "govern",
       title: "El Govern acorda l'actualització del salari mínim d'acord amb la inflació per al 2026",
       link: "https://www.govern.ad/ca/actualitat",
       date: "2026-07-10",
@@ -31,6 +33,8 @@ const PRESEEDED_NEWS = {
       isLegislative: true
     },
     {
+      source: "Govern d'Andorra",
+      sourceId: "govern",
       title: "S'entra a tràmit parlamentari de màxima urgència el Projecte de llei de mesures temporals per fer front a l'increment dels preus dels carburants",
       link: "https://www.govern.ad/ca/actualitat",
       date: "2026-07-08",
@@ -39,6 +43,8 @@ const PRESEEDED_NEWS = {
       isLegislative: true
     },
     {
+      source: "Govern d'Andorra",
+      sourceId: "govern",
       title: "El Govern presenta el nou Reglament regulador de les condicions d'acreditació dels professionals de la salut",
       link: "https://www.govern.ad/ca/actualitat",
       date: "2026-07-01",
@@ -49,6 +55,8 @@ const PRESEEDED_NEWS = {
   ],
   bopa: [
     {
+      source: "BOPA (Revisió manual)",
+      sourceId: "bopa",
       title: "Decret 258/2026, de l'1-7-2026, de modificació del Reglament d'acreditació dels professionals de la salut",
       link: "https://www.bopa.ad/bopa/077073/Pagines/default.aspx",
       date: "2026-07-07",
@@ -58,6 +66,8 @@ const PRESEEDED_NEWS = {
       manualReview: true
     },
     {
+      source: "BOPA (Revisió manual)",
+      sourceId: "bopa",
       title: "Decret 256/2026, de l'1-7-2026, pel qual s'aprova la modificació de la Cartera de serveis i productes de salut",
       link: "https://www.bopa.ad/bopa/077073/Pagines/default.aspx",
       date: "2026-07-07",
@@ -67,6 +77,8 @@ const PRESEEDED_NEWS = {
       manualReview: true
     },
     {
+      source: "BOPA (Revisió manual)",
+      sourceId: "bopa",
       title: "Butlletí Oficial del Principat d'Andorra (BOPA) - Publicació del Butlletí Ordinari núm. 77",
       link: "https://www.bopa.ad",
       date: "2026-07-07",
