@@ -985,7 +985,7 @@ async function fetchAllFeeds() {
     { id: 'elperiodic', name: 'El Periòdic', url: 'https://elperiodic.ad/feed/', load: () => scrapeGenericRSS('https://elperiodic.ad/feed/', 'El Periòdic', 'elperiodic') },
     { id: 'andorraara', name: 'Andorra Ara', url: 'https://andorraara.com/ca/feed', load: () => scrapeGenericRSS('https://andorraara.com/ca/feed', 'Andorra Ara', 'andorraara') },
     { id: 'altaveu', name: 'Altaveu', url: 'https://www.altaveu.com/uploads/feeds/feed_altaveu_ca.xml', load: () => scrapeGenericRSS('https://www.altaveu.com/uploads/feeds/feed_altaveu_ca.xml', 'Altaveu', 'altaveu') },
-    { id: 'digitalandorra', name: 'Digital Andorra', url: 'https://digitalandorra.com/feed/', load: () => scrapeGenericRSS('https://digitalandorra.com/feed/', 'Digital Andorra', 'digitalandorra') }
+    { id: 'digitalandorra', name: 'Digital Andorra', url: 'https://digitalandorra.com/category/tribunals/feed/', load: () => scrapeGenericRSS('https://digitalandorra.com/category/tribunals/feed/', 'Digital Andorra', 'digitalandorra') }
   ];
   const checkedAt = new Date().toISOString();
   const results = await Promise.allSettled(sources.map(source => source.load()));

@@ -548,24 +548,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 
                 <h3 class="news-title">
-                    <a href="${safeLink}" target="_blank" rel="noopener noreferrer" title="Obrir la font oficial">${escapeHtml(item.title)}</a>
+                    <a href="${safeLink}" target="_blank" rel="noopener noreferrer" title="${item.officialDocument ? 'Obrir la font oficial' : 'Obrir la notícia'}">${escapeHtml(item.title)}</a>
                 </h3>
                 
                 ${bopaIndicatorHtml}
                 ${entryIntoForceHtml}
                 ${operativeDeadlinesHtml}
                 
-                <p class="news-snippet">${escapeHtml(item.snippet || "Sense descripció disponible. Obriu la font oficial per consultar el contingut complet.")}</p>
+                <p class="news-snippet">${escapeHtml(item.snippet || (item.officialDocument ? "Sense descripció disponible. Obriu la font oficial per consultar el contingut complet." : "Sense descripció disponible."))}</p>
                 ${professionalReviewHtml}
             </div>
             
             <div class="card-footer">
                 <div class="card-tags">
                     <span class="category-tag">
-                        <i class="fa-solid fa-file-lines"></i> ${escapeHtml(item.documentType || "Actualitat oficial")}
+                        <i class="fa-solid fa-file-lines"></i> ${escapeHtml(item.documentType || (item.officialDocument ? "Actualitat oficial" : "Actualitat"))}
                     </span>
                     <span class="practice-area-tag"><i class="fa-solid fa-briefcase"></i> ${escapeHtml(item.practiceArea || "General")}</span>
-                    <span class="legal-stage-tag"><i class="fa-solid fa-gavel"></i> ${escapeHtml(item.legalStage || "Seguiment")}</span>
+                    <span class="legal-stage-tag"><i class="fa-solid fa-gavel"></i> ${escapeHtml(item.legalStage || (item.officialDocument ? "Seguiment" : "Seguiment de premsa"))}</span>
                     <span class="relevance-tag ${relevanceClass}">${relevanceLabel}</span>
                 </div>
                 
@@ -577,8 +577,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="btn-action-text btn-expand" title="Resum amb IA">
                         <i class="fa-solid fa-wand-magic-sparkles"></i> Resum IA
                     </button>` : ''}
-                    <a href="${safeLink}" target="_blank" rel="noopener noreferrer" class="btn-action-link" title="Consultar la font oficial">
-                        Font oficial <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    <a href="${safeLink}" target="_blank" rel="noopener noreferrer" class="btn-action-link" title="${item.officialDocument ? 'Consultar la font oficial' : 'Consultar la font'}">
+                        ${item.officialDocument ? 'Font oficial' : 'Font'} <i class="fa-solid fa-arrow-up-right-from-square"></i>
                     </a>
                 </div>
             </div>
