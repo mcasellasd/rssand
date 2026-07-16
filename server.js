@@ -993,7 +993,9 @@ app.get('/api/news/summary', async (req, res) => {
     const summary = await getAiSummary(forceRefresh, req.query.area);
     res.json(summary);
   } catch (error) {
-    console.error("Error generant el resum setmanal amb Gemini:", error);
+    if (error.status !== 400) {
+      console.error("Error generant el resum setmanal:", error);
+    }
     let errorMsg = "S'ha produït un error al generar el resum setmanal amb Intel·ligència Artificial.";
     let status = error.status || 500;
     if (status === 400) errorMsg = error.message;
@@ -1309,7 +1311,9 @@ app.get('/api/news/newsletter', async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error generant el butlletí jurídic setmanal:", error);
+    if (error.status !== 400) {
+      console.error("Error generant el butlletí jurídic setmanal:", error);
+    }
     let errorMsg = "S'ha produït un error al generar el butlletí jurídic setmanal amb Intel·ligència Artificial.";
     let status = error.status || 500;
     if (status === 400) errorMsg = error.message;
