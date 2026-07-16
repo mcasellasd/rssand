@@ -37,9 +37,9 @@
             
             <div class="header-controls">
                 <span id="cache-status" class="cache-badge"><i class="fa-solid fa-spinner fa-spin"></i> Carregant...</span>
-                <a class="rss-subscribe-btn" href="/feed.xml" target="_blank" rel="noopener noreferrer" title="Subscriure's al feed jurídic RSS">
-                    <i class="fa-solid fa-rss"></i> RSS
-                </a>
+                <button id="btn-subscribe" class="rss-subscribe-btn" type="button" aria-expanded="false" aria-controls="subscribe-panel">
+                    <i class="fa-solid fa-paper-plane"></i> Rep el brief
+                </button>
                 <button id="btn-source-status" class="source-status-btn" type="button" aria-expanded="false" aria-controls="source-status-panel">
                     <i class="fa-solid fa-circle-notch fa-spin"></i> Fonts
                 </button>
@@ -48,6 +48,34 @@
                 </button>
             </div>
         </header>
+
+        <section id="subscribe-panel" class="subscribe-panel glass-card hide" aria-live="polite">
+            <div class="subscribe-copy">
+                <span class="eyebrow"><i class="fa-solid fa-rss"></i> Subscripció sense dades personals</span>
+                <h2>Rep només les novetats que t’interessen</h2>
+                <p>Crea un canal RSS jurídic personalitzat i afegeix-lo al teu lector habitual. S’actualitza automàticament quan hi ha noves publicacions oficials.</p>
+            </div>
+            <div class="subscribe-builder">
+                <label for="subscribe-area">
+                    Àrea de pràctica
+                    <select id="subscribe-area">
+                        <option value="">Totes les àrees</option>
+                    </select>
+                </label>
+                <label class="subscribe-checkbox" for="subscribe-high-only">
+                    <input id="subscribe-high-only" type="checkbox">
+                    <span>Només impacte jurídic alt</span>
+                </label>
+                <div class="subscribe-url-row">
+                    <input id="subscribe-feed-url" type="text" readonly aria-label="URL del canal RSS personalitzat">
+                    <button id="btn-copy-feed" type="button"><i class="fa-regular fa-copy"></i> Copia</button>
+                    <a id="btn-open-feed" href="/feed.xml" target="_blank" rel="noopener noreferrer">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Obre
+                    </a>
+                </div>
+                <p id="subscribe-feedback" class="subscribe-feedback" role="status"></p>
+            </div>
+        </section>
 
         <section id="source-status-panel" class="source-status-panel glass-card hide" aria-live="polite">
             <div class="source-status-heading">
@@ -203,9 +231,17 @@
                             <p class="newsletter-subtitle">Correu maquetat amb les novetats oficials que poden requerir revisió del despatx</p>
                         </div>
                     </div>
-                    <button id="btn-generate-newsletter" class="btn-refresh">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generar Butlletí
-                    </button>
+                    <div class="newsletter-controls">
+                        <label for="newsletter-area-select">
+                            Edició per àrea
+                            <select id="newsletter-area-select" aria-label="Selecciona l’àrea de pràctica del butlletí">
+                                <option value="all">Totes les àrees de pràctica</option>
+                            </select>
+                        </label>
+                        <button id="btn-generate-newsletter" class="btn-refresh">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Generar Butlletí
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Loading State -->

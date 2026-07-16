@@ -1,9 +1,25 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const PRACTICE_AREA_PREFERENCE_KEY = 'andorraLegalBriefPracticeArea';
+    function readPracticeAreaPreference() {
+        try {
+            return localStorage.getItem(PRACTICE_AREA_PREFERENCE_KEY) || 'all';
+        } catch (error) {
+            return 'all';
+        }
+    }
+    function savePracticeAreaPreference(value) {
+        try {
+            localStorage.setItem(PRACTICE_AREA_PREFERENCE_KEY, value);
+        } catch (error) {
+            // The application remains usable when browser storage is unavailable.
+        }
+    }
+
     // STATE MANAGERS
     let allNewsItems = [];
     let currentTab = 'all';
     let searchQuery = '';
-    let currentPracticeArea = 'all';
+    let currentPracticeArea = readPracticeAreaPreference();
     let isLegalFilterStrict = true;
 
     // DOM ELEMENTS
@@ -21,6 +37,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const sourceStatusPanel = document.getElementById('source-status-panel');
     const sourceStatusSummary = document.getElementById('source-status-summary');
     const sourceStatusGrid = document.getElementById('source-status-grid');
+    const subscribeBtn = document.getElementById('btn-subscribe');
+    const subscribePanel = document.getElementById('subscribe-panel');
+    const subscribeArea = document.getElementById('subscribe-area');
+    const subscribeHighOnly = document.getElementById('subscribe-high-only');
+    const subscribeFeedUrl = document.getElementById('subscribe-feed-url');
+    const copyFeedBtn = document.getElementById('btn-copy-feed');
+    const openFeedBtn = document.getElementById('btn-open-feed');
+    const subscribeFeedback = document.getElementById('subscribe-feedback');
     
     const refreshBtn = document.getElementById('btn-refresh');
     const resetFiltersBtn = document.getElementById('btn-reset-filters');
@@ -46,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const newsletterErrorText = document.getElementById('newsletter-error-text');
     const newsletterContent = document.getElementById('newsletter-content');
     const newsletterIframePreview = document.getElementById('newsletter-iframe-preview');
+    const newsletterAreaSelect = document.getElementById('newsletter-area-select');
     
     const btnCopyHtml = document.getElementById('btn-copy-html');
     const btnCopyText = document.getElementById('btn-copy-text');
@@ -146,6 +171,49 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         practiceAreaSelect.value = areas.includes(previousValue) ? previousValue : 'all';
         currentPracticeArea = practiceAreaSelect.value;
+
+        const subscribePreviousValue = subscribeArea.value;
+        subscribeArea.innerHTML = '<option value="">Totes les àrees</option>';
+        areas.forEach(area => {
+            const option = document.createElement('option');
+            option.value = area;
+            option.textContent = area;
+            subscribeArea.appendChild(option);
+        });
+        const preferredArea = currentPracticeArea === 'all' ? '' : currentPracticeArea;
+        subscribeArea.value = areas.includes(subscribePreviousValue)
+            ? subscribePreviousValue
+            : (areas.includes(preferredArea) ? preferredArea : '');
+
+        const newsletterPreviousValue = newsletterAreaSelect.value;
+        newsletterAreaSelect.innerHTML = '<option value="all">Totes les àrees de pràctica</option>';
+        areas.forEach(area => {
+            const option = document.createElement('option');
+            option.value = area;
+            option.textContent = area;
+            newsletterAreaSelect.appendChild(option);
+        });
+        newsletterAreaSelect.value = areas.includes(newsletterPreviousValue)
+            ? newsletterPreviousValue
+            : currentPracticeArea;
+        updatePersonalFeedUrl();
+    }
+
+    function updatePersonalFeedUrl() {
+        const url = new URL('/feed.xml', window.location.origin);
+        if (subscribeArea.value) url.searchParams.set('area', subscribeArea.value);
+        if (subscribeHighOnly.checked) url.searchParams.set('relevance', 'high');
+        subscribeFeedUrl.value = url.href;
+        openFeedBtn.href = url.href;
+        const matchingItems = allNewsItems.filter(item =>
+            item.isLegislative !== false &&
+            item.legalRelevance !== 'low' &&
+            (!subscribeArea.value || item.practiceArea === subscribeArea.value) &&
+            (!subscribeHighOnly.checked || item.legalRelevance === 'high')
+        );
+        subscribeFeedback.textContent = allNewsItems.length
+            ? `${Math.min(matchingItems.length, 75)} publicacions disponibles ara en aquest canal.`
+            : '';
     }
 
     function updateSourceStatus(sources) {
@@ -418,6 +486,27 @@ document.addEventListener('DOMContentLoaded', () => {
         sourceStatusBtn.setAttribute('aria-expanded', String(willOpen));
     });
 
+    subscribeBtn.addEventListener('click', () => {
+        const willOpen = subscribePanel.classList.contains('hide');
+        subscribePanel.classList.toggle('hide');
+        subscribeBtn.setAttribute('aria-expanded', String(willOpen));
+        if (willOpen) updatePersonalFeedUrl();
+    });
+
+    subscribeArea.addEventListener('change', updatePersonalFeedUrl);
+    subscribeHighOnly.addEventListener('change', updatePersonalFeedUrl);
+
+    copyFeedBtn.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(subscribeFeedUrl.value);
+        } catch (error) {
+            subscribeFeedUrl.focus();
+            subscribeFeedUrl.select();
+            document.execCommand('copy');
+        }
+        subscribeFeedback.textContent = 'Enllaç copiat. Enganxa’l al teu lector RSS.';
+    });
+
     // Reset filters empty state button
     resetFiltersBtn.addEventListener('click', () => {
         searchInput.value = '';
@@ -465,6 +554,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     practiceAreaSelect.addEventListener('change', (e) => {
         currentPracticeArea = e.target.value;
+        savePracticeAreaPreference(currentPracticeArea);
+        newsletterAreaSelect.value = currentPracticeArea;
+        subscribeArea.value = currentPracticeArea === 'all' ? '' : currentPracticeArea;
+        newsletterHtml = '';
+        newsletterText = '';
+        aiSummaryContent.classList.add('hide');
+        updatePersonalFeedUrl();
         applyFiltersAndRender();
     });
 
@@ -487,7 +583,9 @@ document.addEventListener('DOMContentLoaded', () => {
         aiError.classList.add('hide');
 
         try {
-            const response = await fetch('/api/news/summary');
+            const params = new URLSearchParams();
+            if (currentPracticeArea !== 'all') params.set('area', currentPracticeArea);
+            const response = await fetch(`/api/news/summary${params.size ? `?${params.toString()}` : ''}`);
             if (!response.ok) {
                 const errData = await response.json();
                 throw new Error(errData.error || `Error del servidor: ${response.status}`);
@@ -534,7 +632,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 hour: '2-digit',
                 minute: '2-digit'
             });
-            aiSummaryDate.innerHTML = `<i class="fa-regular fa-clock"></i> Resum del darrer període. Generat el ${dateText}`;
+            const areaText = data.practiceArea && data.practiceArea !== 'all'
+                ? ` · Àrea: ${escapeHtml(data.practiceArea)}`
+                : ' · Totes les àrees';
+            aiSummaryDate.innerHTML = `<i class="fa-regular fa-clock"></i> Resum del darrer període${areaText}. Generat el ${dateText}`;
             aiSummaryMethod.innerHTML = data.editorialMode === 'ai'
                 ? `<i class="fa-solid fa-wand-magic-sparkles"></i> Edició assistida per IA sobre fonts oficials`
                 : `<i class="fa-solid fa-shield-halved"></i> Síntesi automàtica de fonts oficials`;
@@ -554,17 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
             aiSummaryContent.classList.add('hide');
             aiError.classList.remove('hide');
 
-            let displayMsg = error.message;
-            if (error.message.includes('QUOTA_EXCEEDED') || error.message.includes('Quota exceeded') || error.message.includes('quota') || error.message.includes('RESOURCE_EXHAUSTED') || error.message.includes('429')) {
-                displayMsg = `<strong>Quota de l'API de Gemini excedida (Límit de regió o facturació).</strong><br><br>
-                A la regió europea, Google AI Studio requereix tenir un compte de facturació vinculat al projecte de Google Cloud associat per poder utilitzar l'API, fins i tot si es manté dins els límits de crides de la tarifa gratuïta (Free Tier).<br><br>
-                <strong>Com solucionar-ho:</strong><br>
-                1. Afegeix un mètode de pagament al teu compte de facturació a Google AI Studio/Google Cloud per verificar el teu compte (el consum d'API seguirà sent gratuït dins els límits estàndard).<br>
-                2. Alternativament, utilitza una connexió VPN amb IP de fora d'Europa (com ara els Estats Units) per saltar-te aquesta restricció regional de la Free Tier.`;
-            } else {
-                displayMsg = `S'ha produït un error al connectar amb el resum de la Intel·ligència Artificial:<br><br><code>${error.message}</code>`;
-            }
-            aiErrorText.innerHTML = displayMsg;
+            aiErrorText.textContent = `No s'ha pogut preparar el brief en aquest moment. ${error.message}`;
 
             btnAiSummary.disabled = false;
             btnAiSummary.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Error al generar`;
@@ -585,7 +676,10 @@ document.addEventListener('DOMContentLoaded', () => {
         newsletterError.classList.add('hide');
 
         try {
-            const url = bypassCache ? '/api/news/newsletter?refresh=true' : '/api/news/newsletter';
+            const params = new URLSearchParams();
+            if (newsletterAreaSelect.value !== 'all') params.set('area', newsletterAreaSelect.value);
+            if (bypassCache) params.set('refresh', 'true');
+            const url = `/api/news/newsletter${params.size ? `?${params.toString()}` : ''}`;
             const response = await fetch(url);
             if (!response.ok) {
                 const errData = await response.json();
@@ -632,13 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
             newsletterContent.classList.add('hide');
             newsletterError.classList.remove('hide');
 
-            let displayMsg = error.message;
-            if (error.message.includes('QUOTA_EXCEEDED')) {
-                displayMsg = `<strong>Quota de l'API de Gemini excedida.</strong> Obre AI Studio per configurar la facturació o utilitza una VPN fora d'Europa.`;
-            } else {
-                displayMsg = `S'ha produït un error al connectar amb el generador de butlletins:<br><br><code>${error.message}</code>`;
-            }
-            newsletterErrorText.innerHTML = displayMsg;
+            newsletterErrorText.textContent = `No s'ha pogut preparar el butlletí en aquest moment. ${error.message}`;
 
             btnGenerateNewsletter.disabled = false;
             btnGenerateNewsletter.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Error al generar`;
@@ -708,6 +796,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Generate Newsletter button click
     btnGenerateNewsletter.addEventListener('click', () => {
         loadNewsletter(true);
+    });
+
+    newsletterAreaSelect.addEventListener('change', () => {
+        currentPracticeArea = newsletterAreaSelect.value;
+        practiceAreaSelect.value = currentPracticeArea;
+        subscribeArea.value = currentPracticeArea === 'all' ? '' : currentPracticeArea;
+        savePracticeAreaPreference(currentPracticeArea);
+        newsletterHtml = '';
+        newsletterText = '';
+        newsletterContent.classList.add('hide');
+        updatePersonalFeedUrl();
+        applyFiltersAndRender();
+        loadNewsletter();
     });
 
     // INITIAL LOAD

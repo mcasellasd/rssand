@@ -203,7 +203,140 @@ body {
 .rss-subscribe-btn {
     color: #fdba74;
     border-color: rgba(249, 115, 22, 0.28);
+}
+
+.rss-subscribe-btn:focus-visible,
+.subscribe-url-row button:focus-visible,
+.subscribe-url-row a:focus-visible,
+.subscribe-builder select:focus-visible {
+    outline: 2px solid #fdba74;
+    outline-offset: 2px;
+}
+
+.subscribe-panel {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.8fr) minmax(420px, 1.2fr);
+    gap: 2rem;
+    margin-top: 1.25rem;
+    padding: 1.5rem;
+    border-color: rgba(249, 115, 22, 0.2);
+}
+
+.subscribe-copy .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.65rem;
+    color: #fdba74;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.subscribe-copy h2 {
+    margin-bottom: 0.55rem;
+    font: 700 1.25rem var(--font-heading);
+}
+
+.subscribe-copy p,
+.subscribe-feedback {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.55;
+}
+
+.subscribe-builder {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.subscribe-builder > label:not(.subscribe-checkbox) {
+    display: grid;
+    gap: 0.4rem;
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.subscribe-builder select,
+.subscribe-url-row input {
+    min-height: 43px;
+    border: 1px solid var(--card-border);
+    border-radius: 9px;
+    outline: none;
+    color: var(--text-primary);
+    background: var(--bg-dark);
+    padding: 0 0.8rem;
+    font: 500 0.78rem var(--font-body);
+}
+
+.subscribe-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.subscribe-checkbox input {
+    accent-color: var(--accent-blue);
+}
+
+.subscribe-url-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) auto auto;
+    gap: 0.55rem;
+}
+
+.subscribe-url-row button,
+.subscribe-url-row a {
+    min-height: 43px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border: 1px solid rgba(249, 115, 22, 0.28);
+    border-radius: 9px;
+    color: #fed7aa;
+    background: rgba(249, 115, 22, 0.1);
+    padding: 0 0.85rem;
+    font: 700 0.75rem var(--font-body);
     text-decoration: none;
+    cursor: pointer;
+}
+
+.subscribe-feedback {
+    min-height: 1.3em;
+    color: #86efac;
+}
+
+@media (max-width: 860px) {
+    .subscribe-panel {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 560px) {
+    .header-controls {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+    }
+
+    .header-controls .cache-badge {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .subscribe-url-row {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .subscribe-url-row input {
+        grid-column: 1 / -1;
+    }
 }
 
 .source-status-btn.healthy {
@@ -1361,6 +1494,42 @@ input:checked + .slider:before {
     display: flex;
     align-items: center;
     gap: 1rem;
+}
+
+.newsletter-controls {
+    display: flex;
+    align-items: end;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+}
+
+.newsletter-controls label {
+    display: grid;
+    gap: 0.35rem;
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.newsletter-controls select {
+    min-height: 39px;
+    min-width: 220px;
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    outline: none;
+    color: var(--text-primary);
+    background: var(--bg-dark);
+    padding: 0 0.7rem;
+    font: 600 0.75rem var(--font-body);
+}
+
+@media (max-width: 560px) {
+    .newsletter-controls,
+    .newsletter-controls label,
+    .newsletter-controls select,
+    .newsletter-controls .btn-refresh {
+        width: 100%;
+    }
 }
 
 .newsletter-icon {

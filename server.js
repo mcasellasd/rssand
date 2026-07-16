@@ -10,6 +10,7 @@ const ai = process.env.GEMINI_API_KEY && process.env.DISABLE_AI !== 'true'
   : null;
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 // In-memory cache for news feed data
@@ -18,9 +19,8 @@ let cacheTimestamp = null;
 let sourceHealthCache = [];
 const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
 
-// Cache for AI weekly summary and newsletter content
-let aiSummaryCache = null;
-let aiSummaryTimestamp = null;
+// Cache summaries independently for each practice-area edition.
+const aiSummaryCache = new Map();
 
 const BOPA_API_BASE = 'https://bopaazurefunctions.azurewebsites.net';
 const BOPA_DOCUMENTS_ENDPOINT = `${BOPA_API_BASE}/api/GetDocumentsByBOPA?code=g0LIbgotqEe94pypk8MWNTWr3ldcgMQ70o0fSarhINWwAzFuCnk3Lg==`;
@@ -91,11 +91,26 @@ function escapeXml(value) {
     .replace(/'/g, '&apos;');
 }
 
-function buildLegalRss(items, generatedAt) {
+function buildLegalRss(items, generatedAt, options = {}) {
+  const selectedArea = options.area || null;
+  const highRelevanceOnly = options.relevance === 'high';
   const legalItems = items
-    .filter(item => item.isLegislative !== false && item.legalRelevance !== 'low')
+    .filter(item =>
+      item.isLegislative !== false &&
+      item.legalRelevance !== 'low' &&
+      (!selectedArea || item.practiceArea === selectedArea) &&
+      (!highRelevanceOnly || item.legalRelevance === 'high')
+    )
     .slice(0, 75);
-  const channelUrl = 'https://rssand-production.up.railway.app/';
+  const channelUrl = options.channelUrl || 'https://rssand-production.up.railway.app/';
+  const filterLabels = [
+    selectedArea,
+    highRelevanceOnly ? 'impacte jurídic alt' : null
+  ].filter(Boolean);
+  const titleSuffix = filterLabels.length ? ` · ${filterLabels.join(' · ')}` : '';
+  const descriptionSuffix = filterLabels.length
+    ? ` Selecció personalitzada: ${filterLabels.join(', ')}.`
+    : '';
   const entries = legalItems.map(item => `
     <item>
       <title>${escapeXml(item.title)}</title>
@@ -113,9 +128,9 @@ function buildLegalRss(items, generatedAt) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
-    <title>Andorra Legal Brief</title>
-    <link>${channelUrl}</link>
-    <description>Novetats legislatives i reguladores de fonts oficials d'Andorra per a la pràctica jurídica.</description>
+    <title>${escapeXml(`Andorra Legal Brief${titleSuffix}`)}</title>
+    <link>${escapeXml(channelUrl)}</link>
+    <description>${escapeXml(`Novetats legislatives i reguladores de fonts oficials d'Andorra per a la pràctica jurídica.${descriptionSuffix}`)}</description>
     <language>ca</language>
     <lastBuildDate>${new Date(generatedAt).toUTCString()}</lastBuildDate>
     <generator>Andorra Legal Brief</generator>
@@ -195,7 +210,7 @@ function selectEditorialItems(items, limit = 24) {
   return selected;
 }
 
-function buildDeterministicSummary(weeklyNews, newsForPrompt, reason = null) {
+function buildDeterministicSummary(weeklyNews, newsForPrompt, reason = null, practiceArea = 'all') {
   const countBy = field => weeklyNews.reduce((counts, item) => {
     const value = item[field] || 'General';
     counts[value] = (counts[value] || 0) + 1;
@@ -218,7 +233,10 @@ function buildDeterministicSummary(weeklyNews, newsForPrompt, reason = null) {
     editorialNote: reason
       ? 'Síntesi automàtica basada exclusivament en metadades oficials; la capa editorial d’IA no estava disponible.'
       : 'Síntesi automàtica basada exclusivament en metadades oficials.',
-    resumExecutiu: `En els darrers set dies s’han identificat ${weeklyNews.length} publicacions oficials amb rellevància jurídica. Les àrees amb més activitat són ${areasText || 'les àrees generals i institucionals'}. Per tipus documental destaquen ${typesText || 'les publicacions oficials generals'}.`,
+    practiceArea,
+    resumExecutiu: practiceArea === 'all'
+      ? `En els darrers set dies s’han identificat ${weeklyNews.length} publicacions oficials amb rellevància jurídica. Les àrees amb més activitat són ${areasText || 'les àrees generals i institucionals'}. Per tipus documental destaquen ${typesText || 'les publicacions oficials generals'}.`
+      : `En els darrers set dies s’han identificat ${weeklyNews.length} publicacions oficials amb rellevància jurídica per a l’àrea ${practiceArea}. Per tipus documental destaquen ${typesText || 'les publicacions oficials generals'}.`,
     puntsClau: selected.map(item => item.title),
     categoriesDestacades: topAreas.map(([nom, count]) => ({
       nom,
@@ -746,6 +764,7 @@ async function fetchAllFeeds() {
 
   newsCache = normalizedItems;
   cacheTimestamp = Date.now();
+  aiSummaryCache.clear();
   return normalizedItems;
 }
 
@@ -795,8 +814,26 @@ app.get('/feed.xml', async (req, res) => {
     if (!items || !cacheTimestamp || (Date.now() - cacheTimestamp > CACHE_DURATION)) {
       items = await fetchAllFeeds();
     }
+    const availableAreas = new Set(items.map(item => item.practiceArea).filter(Boolean));
+    const requestedArea = typeof req.query.area === 'string' ? req.query.area.trim() : '';
+    if (requestedArea && !availableAreas.has(requestedArea)) {
+      return res.status(400).type('text/plain; charset=utf-8').send('Àrea de pràctica no reconeguda.');
+    }
+    const area = availableAreas.has(requestedArea) ? requestedArea : null;
+    const relevance = req.query.relevance === 'high' ? 'high' : 'all';
+    const publicBaseUrl = (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+    const query = new URLSearchParams();
+    if (area) query.set('area', area);
+    if (relevance === 'high') query.set('relevance', 'high');
+    const feedUrl = `${publicBaseUrl}/feed.xml${query.size ? `?${query.toString()}` : ''}`;
+
     res.type('application/rss+xml; charset=utf-8');
-    res.send(buildLegalRss(items, cacheTimestamp || Date.now()));
+    res.set('Cache-Control', 'public, max-age=900');
+    res.send(buildLegalRss(items, cacheTimestamp || Date.now(), {
+      area,
+      relevance,
+      channelUrl: feedUrl
+    }));
   } catch (error) {
     console.error("Error generant el feed RSS jurídic:", error);
     res.status(500).type('text/plain').send("No s'ha pogut generar el feed RSS.");
@@ -804,10 +841,14 @@ app.get('/feed.xml', async (req, res) => {
 });
 
 // Helper function to generate and cache weekly AI Summary
-async function getAiSummary(forceRefresh = false) {
+async function getAiSummary(forceRefresh = false, requestedPracticeArea = 'all') {
   const now = Date.now();
-  if (!forceRefresh && aiSummaryCache && aiSummaryTimestamp && (now - aiSummaryTimestamp < CACHE_DURATION)) {
-    return aiSummaryCache;
+  const requestedArea = typeof requestedPracticeArea === 'string' && requestedPracticeArea.trim()
+    ? requestedPracticeArea.trim()
+    : 'all';
+  const cachedSummary = aiSummaryCache.get(requestedArea);
+  if (!forceRefresh && cachedSummary && (now - cachedSummary.timestamp < CACHE_DURATION)) {
+    return cachedSummary.data;
   }
 
   let items = newsCache;
@@ -819,6 +860,13 @@ async function getAiSummary(forceRefresh = false) {
     throw new Error("No s'han trobat notícies per realitzar el resum.");
   }
 
+  const availableAreas = new Set(items.map(item => item.practiceArea).filter(Boolean));
+  if (requestedArea !== 'all' && !availableAreas.has(requestedArea)) {
+    const error = new Error('Àrea de pràctica no reconeguda.');
+    error.status = 400;
+    throw error;
+  }
+
   // Filter news from the last 7 days
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -827,22 +875,28 @@ async function getAiSummary(forceRefresh = false) {
   const weeklyNews = items.filter(item =>
     item.date >= limitDateStr &&
     item.legalRelevance !== 'low' &&
-    item.isLegislative !== false
+    item.isLegislative !== false &&
+    (requestedArea === 'all' || item.practiceArea === requestedArea)
   );
 
   if (weeklyNews.length === 0) {
-    aiSummaryCache = {
+    const emptySummary = {
       timestamp: new Date().toISOString(),
       itemsCount: 0,
+      sampledItemsCount: 0,
+      sampledSources: [],
+      practiceArea: requestedArea,
       editorialMode: 'deterministic',
       editorialNote: 'No hi ha publicacions suficients en el període seleccionat.',
-      resumExecutiu: "No hi ha prou notícies publicades en els darrers 7 dies per generar un resum setmanal.",
+      resumExecutiu: requestedArea === 'all'
+        ? "No hi ha prou notícies publicades en els darrers 7 dies per generar un resum setmanal."
+        : `No hi ha prou publicacions de l’àrea ${requestedArea} en els darrers 7 dies per generar un resum setmanal.`,
       puntsClau: [],
       categoriesDestacades: [],
       noticiesAmbImpacte: []
     };
-    aiSummaryTimestamp = Date.now();
-    return aiSummaryCache;
+    aiSummaryCache.set(requestedArea, { timestamp: Date.now(), data: emptySummary });
+    return emptySummary;
   }
 
   // Balance the editorial sample so a high-volume source cannot crowd out
@@ -855,6 +909,7 @@ async function getAiSummary(forceRefresh = false) {
 
   const prompt = `Ets l'editor jurídic d'un butlletí professional adreçat a advocats exercents del Principat d'Andorra.
 A partir exclusivament de les següents publicacions oficials de la darrera setmana, redacta una síntesi rigorosa, concisa i útil per a la pràctica jurídica, en català.
+Edició sol·licitada: ${requestedArea === 'all' ? 'totes les àrees de pràctica' : requestedArea}.
 
 Notícies de la setmana:
 ${newsSummaryText}
@@ -863,11 +918,11 @@ No inventis dates d'entrada en vigor, terminis, obligacions, efectes jurídics n
 Prioritza lleis, reglaments, decrets, resolucions, jurisprudència, iniciatives legislatives i canvis regulatoris amb impacte professional.
 Per a "noticiesAmbImpacte", selecciona fins a 6 publicacions i conserva exactament el títol i l'enllaç originals. Explica en 1 o 2 frases què convé revisar o per què pot ser rellevant per a un despatx, sense donar assessorament jurídic ni extrapolar més enllà de la font.`;
 
-  const fallbackSummary = buildDeterministicSummary(weeklyNews, newsForPrompt);
+  const fallbackSummary = buildDeterministicSummary(weeklyNews, newsForPrompt, null, requestedArea);
   if (!ai) {
-    aiSummaryCache = buildDeterministicSummary(weeklyNews, newsForPrompt, 'missing_api_key');
-    aiSummaryTimestamp = Date.now();
-    return aiSummaryCache;
+    const summary = buildDeterministicSummary(weeklyNews, newsForPrompt, 'missing_api_key', requestedArea);
+    aiSummaryCache.set(requestedArea, { timestamp: Date.now(), data: summary });
+    return summary;
   }
 
   try {
@@ -920,25 +975,28 @@ Per a "noticiesAmbImpacte", selecciona fins a 6 publicacions i conserva exactame
     });
 
     const summaryJson = JSON.parse(response.text);
-    aiSummaryCache = normalizeAiSummary(summaryJson, newsForPrompt, fallbackSummary);
+    const summary = normalizeAiSummary(summaryJson, newsForPrompt, fallbackSummary);
+    aiSummaryCache.set(requestedArea, { timestamp: Date.now(), data: summary });
+    return summary;
   } catch (error) {
     console.error('AI summary unavailable; using deterministic legal brief:', error.message);
-    aiSummaryCache = buildDeterministicSummary(weeklyNews, newsForPrompt, error.message);
+    const summary = buildDeterministicSummary(weeklyNews, newsForPrompt, error.message, requestedArea);
+    aiSummaryCache.set(requestedArea, { timestamp: Date.now(), data: summary });
+    return summary;
   }
-  aiSummaryTimestamp = Date.now();
-  return aiSummaryCache;
 }
 
 // API Endpoint to get AI-generated weekly summary
 app.get('/api/news/summary', async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === 'true';
-    const summary = await getAiSummary(forceRefresh);
+    const summary = await getAiSummary(forceRefresh, req.query.area);
     res.json(summary);
   } catch (error) {
     console.error("Error generant el resum setmanal amb Gemini:", error);
     let errorMsg = "S'ha produït un error al generar el resum setmanal amb Intel·ligència Artificial.";
-    let status = 500;
+    let status = error.status || 500;
+    if (status === 400) errorMsg = error.message;
     if (error.status === 429 || (error.message && (error.message.includes('Quota') || error.message.includes('quota') || error.message.includes('429') || error.message.includes('RESOURCE_EXHAUSTED')))) {
       status = 429;
       errorMsg = "QUOTA_EXCEEDED";
@@ -990,11 +1048,12 @@ function safeExternalUrl(value) {
 }
 
 // Generate HTML Newsletter Template with responsive and inline styles
-function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbImpacte, allNewsItems, editorialMode) {
+function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbImpacte, allNewsItems, editorialMode, practiceArea = 'all') {
   const dateFormatted = parseDateToCatalan(dateStr);
   const methodLabel = editorialMode === 'ai'
     ? 'Edició assistida per IA sobre fonts oficials'
     : 'Síntesi automàtica de fonts oficials';
+  const areaLabel = practiceArea === 'all' ? 'Totes les àrees de pràctica' : practiceArea;
   
   const pointsHtml = puntsClau.map(pt => `
     <li style="margin-bottom: 8px; color: #334155; font-size: 15px; line-height: 1.5; font-family: 'Inter', sans-serif;">
@@ -1100,6 +1159,7 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
                 <h1 style="color: #ffffff; font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; margin: 15px 0 5px 0; letter-spacing: -0.02em;">ANDORRA LEGAL BRIEF</h1>
                 <p style="color: #3b82f6; font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.1em;">Novetats per a la pràctica jurídica</p>
                 <p style="color: #94a3b8; font-size: 13px; margin: 0;">${dateFormatted}</p>
+                <p style="color: #bfdbfe; font-size: 12px; font-weight: 600; margin: 8px 0 0 0;">Àrea: ${escapeHtml(areaLabel)}</p>
                 <p style="display: inline-block; color: #cbd5e1; background-color: rgba(255,255,255,0.08); border-radius: 999px; padding: 5px 10px; font-size: 11px; margin: 12px 0 0 0;">${methodLabel}</p>
               </td>
             </tr>
@@ -1148,7 +1208,7 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
 }
 
 // Generate Plain Text Fallback Version of the Newsletter
-function generateNewsletterText(dateStr, editorialIntro, puntsClau, noticiesAmbImpacte, editorialMode) {
+function generateNewsletterText(dateStr, editorialIntro, puntsClau, noticiesAmbImpacte, editorialMode, practiceArea = 'all') {
   const dateFormatted = parseDateToCatalan(dateStr);
   const methodLabel = editorialMode === 'ai'
     ? 'Edició assistida per IA sobre fonts oficials'
@@ -1161,6 +1221,7 @@ function generateNewsletterText(dateStr, editorialIntro, puntsClau, noticiesAmbI
   return `ANDORRA LEGAL BRIEF - Novetats per a la pràctica jurídica
 Data: ${dateFormatted}
 Mètode editorial: ${methodLabel}
+Àrea: ${practiceArea === 'all' ? 'Totes les àrees de pràctica' : practiceArea}
 ==================================================
 
 RESUM DE LA SETMANA:
@@ -1184,7 +1245,8 @@ Obrir l'aplicació web: https://rssand-production.up.railway.app
 app.get('/api/news/newsletter', async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === 'true';
-    const summary = await getAiSummary(forceRefresh);
+    const summary = await getAiSummary(forceRefresh, req.query.area);
+    const practiceArea = summary.practiceArea || 'all';
 
     let items = newsCache;
     if (!items || items.length === 0) {
@@ -1205,7 +1267,8 @@ app.get('/api/news/newsletter', async (req, res) => {
     const weeklyNews = items.filter(item =>
       item.date >= limitDateStr &&
       item.legalRelevance !== 'low' &&
-      item.isLegislative !== false
+      item.isLegislative !== false &&
+      (practiceArea === 'all' || item.practiceArea === practiceArea)
     );
 
     const newsletterData = {
@@ -1222,7 +1285,8 @@ app.get('/api/news/newsletter', async (req, res) => {
       newsletterData.puntsClau,
       newsletterData.noticiesAmbImpacte,
       weeklyNews,
-      newsletterData.editorialMode
+      newsletterData.editorialMode,
+      practiceArea
     );
 
     const textContent = generateNewsletterText(
@@ -1230,13 +1294,15 @@ app.get('/api/news/newsletter', async (req, res) => {
       newsletterData.editorialIntro,
       newsletterData.puntsClau,
       newsletterData.noticiesAmbImpacte,
-      newsletterData.editorialMode
+      newsletterData.editorialMode,
+      practiceArea
     );
 
     res.json({
       timestamp: new Date().toISOString(),
       date: latestDate,
       itemsCount: weeklyNews.length,
+      practiceArea,
       data: newsletterData,
       html: htmlContent,
       text: textContent
@@ -1245,7 +1311,8 @@ app.get('/api/news/newsletter', async (req, res) => {
   } catch (error) {
     console.error("Error generant el butlletí jurídic setmanal:", error);
     let errorMsg = "S'ha produït un error al generar el butlletí jurídic setmanal amb Intel·ligència Artificial.";
-    let status = 500;
+    let status = error.status || 500;
+    if (status === 400) errorMsg = error.message;
     if (error.status === 429 || (error.message && (error.message.includes('Quota') || error.message.includes('quota') || error.message.includes('429') || error.message.includes('RESOURCE_EXHAUSTED')))) {
       status = 429;
       errorMsg = "QUOTA_EXCEEDED";
@@ -1255,6 +1322,13 @@ app.get('/api/news/newsletter', async (req, res) => {
 });
 
 // Start Express Server
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = {
+  app,
+  buildLegalRss
+};
