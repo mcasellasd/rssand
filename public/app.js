@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let allNewsItems = [];
     let currentTab = 'all';
     let searchQuery = '';
+    let currentPracticeArea = 'all';
     let isLegalFilterStrict = true;
 
     // DOM ELEMENTS
@@ -12,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const searchInput = document.getElementById('search-input');
     const searchClearBtn = document.getElementById('search-clear-btn');
+    const practiceAreaSelect = document.getElementById('practice-area-select');
     const cgFilterToggle = document.getElementById('cg-filter-toggle');
     const bopaAlert = document.getElementById('bopa-alert');
     const cacheStatus = document.getElementById('cache-status');
@@ -113,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const data = await response.json();
             allNewsItems = data.items || [];
+            populatePracticeAreas();
             
             // Update cache status badge
             updateCacheBadge(data.cached, data.timestamp);
@@ -124,6 +127,24 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error carregant les notícies:', error);
             showErrorState(error.message);
         }
+    }
+
+    function populatePracticeAreas() {
+        const previousValue = currentPracticeArea;
+        const areas = [...new Set(allNewsItems
+            .map(item => item.practiceArea)
+            .filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b, 'ca'));
+
+        practiceAreaSelect.innerHTML = '<option value="all">Totes les àrees de pràctica</option>';
+        areas.forEach(area => {
+            const option = document.createElement('option');
+            option.value = area;
+            option.textContent = area;
+            practiceAreaSelect.appendChild(option);
+        });
+        practiceAreaSelect.value = areas.includes(previousValue) ? previousValue : 'all';
+        currentPracticeArea = practiceAreaSelect.value;
     }
 
     function updateSourceStatus(sources) {
@@ -253,6 +274,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        if (currentPracticeArea !== 'all') {
+            filtered = filtered.filter(item => item.practiceArea === currentPracticeArea);
+        }
+
         // Filter by Search Query
         if (searchQuery.trim() !== '') {
             const query = searchQuery.toLowerCase().trim();
@@ -260,7 +285,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 (item.title && item.title.toLowerCase().includes(query)) ||
                 (item.snippet && item.snippet.toLowerCase().includes(query)) ||
                 (item.source && item.source.toLowerCase().includes(query)) ||
-                (item.category && item.category.toLowerCase().includes(query))
+                (item.category && item.category.toLowerCase().includes(query)) ||
+                (item.documentType && item.documentType.toLowerCase().includes(query)) ||
+                (item.practiceArea && item.practiceArea.toLowerCase().includes(query))
             );
         }
 
@@ -303,6 +330,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const safeLink = safeExternalUrl(item.link);
         const relevanceLabel = item.legalRelevance === 'high' ? 'Impacte jurídic alt' : 'Seguiment';
         const relevanceClass = item.legalRelevance === 'high' ? 'relevance-high' : 'relevance-medium';
+        const entryIntoForceHtml = item.entryIntoForce ? `
+            <div class="entry-into-force">
+                <i class="fa-solid fa-calendar-check"></i>
+                <span><strong>Entrada en vigor:</strong> ${escapeHtml(item.entryIntoForce)}</span>
+            </div>
+        ` : '';
 
         const displayDate = formatDateDisplay(item.date);
 
@@ -331,6 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </h3>
                 
                 ${bopaIndicatorHtml}
+                ${entryIntoForceHtml}
                 
                 <p class="news-snippet">${escapeHtml(item.snippet || "Sense descripció disponible. Obriu la font oficial per consultar el contingut complet.")}</p>
             </div>
@@ -338,8 +372,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="card-footer">
                 <div class="card-tags">
                     <span class="category-tag">
-                        <i class="fa-solid fa-tags"></i> ${escapeHtml(item.category || "General")}
+                        <i class="fa-solid fa-file-lines"></i> ${escapeHtml(item.documentType || "Actualitat oficial")}
                     </span>
+                    <span class="practice-area-tag"><i class="fa-solid fa-briefcase"></i> ${escapeHtml(item.practiceArea || "General")}</span>
                     <span class="relevance-tag ${relevanceClass}">${relevanceLabel}</span>
                 </div>
                 
@@ -387,6 +422,8 @@ document.addEventListener('DOMContentLoaded', () => {
         searchInput.value = '';
         searchQuery = '';
         searchClearBtn.style.display = 'none';
+        currentPracticeArea = 'all';
+        practiceAreaSelect.value = 'all';
         isLegalFilterStrict = true;
         cgFilterToggle.checked = true;
         currentTab = 'all';
@@ -422,6 +459,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // CG filter toggle slider
     cgFilterToggle.addEventListener('change', (e) => {
         isLegalFilterStrict = e.target.checked;
+        applyFiltersAndRender();
+    });
+
+    practiceAreaSelect.addEventListener('change', (e) => {
+        currentPracticeArea = e.target.value;
         applyFiltersAndRender();
     });
 

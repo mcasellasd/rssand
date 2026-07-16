@@ -101,6 +101,8 @@ function buildLegalRss(items, generatedAt) {
       <guid isPermaLink="true">${escapeXml(item.link)}</guid>
       <pubDate>${new Date(`${item.date}T12:00:00Z`).toUTCString()}</pubDate>
       <category>${escapeXml(item.category || 'Actualitat jurídica')}</category>
+      <category>${escapeXml(item.documentType || 'Actualitat oficial')}</category>
+      <category>${escapeXml(item.practiceArea || 'General i institucional')}</category>
       <source url="${escapeXml(item.link)}">${escapeXml(item.source || 'Font oficial')}</source>
       <description>${escapeXml(item.snippet || 'Consulteu la publicació oficial.')}</description>
     </item>
@@ -137,6 +139,105 @@ function getLegalRelevance(title = '', category = '') {
   if (highKeywords.some(keyword => text.includes(keyword))) return 'high';
   if (mediumKeywords.some(keyword => text.includes(keyword))) return 'medium';
   return 'low';
+}
+
+function getDocumentType(title = '', category = '') {
+  const text = `${title} ${category}`.toLowerCase();
+  const types = [
+    ['Projecte de llei', ['projecte de llei']],
+    ['Proposició de llei', ['proposició de llei']],
+    ['Llei', ['llei ', 'lleis']],
+    ['Reglament', ['reglament']],
+    ['Decret', ['decret']],
+    ['Sentència / Aute', ['sentència', 'aute', 'jurisprud']],
+    ['Resolució', ['resolució']],
+    ['Aprovació parlamentària', ['aprova la modificació', 'aprovat el projecte', 'aprovada la llei']],
+    ['Edicte', ['edicte']],
+    ['Avís', ['avís']],
+    ['Informe', ['informe']],
+    ['Comunicat', ['comunicat']]
+  ];
+  const match = types.find(([, keywords]) => keywords.some(keyword => text.includes(keyword)));
+  return match ? match[0] : 'Actualitat oficial';
+}
+
+function selectEditorialItems(items, limit = 24) {
+  const relevanceRank = { high: 3, medium: 2, low: 1 };
+  const groups = new Map();
+  const sortedItems = [...items].sort((a, b) => {
+    const relevanceDifference = (relevanceRank[b.legalRelevance] || 0) - (relevanceRank[a.legalRelevance] || 0);
+    if (relevanceDifference !== 0) return relevanceDifference;
+    return new Date(b.date) - new Date(a.date);
+  });
+
+  for (const item of sortedItems) {
+    const key = item.sourceId || item.source || 'other';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+
+  const selected = [];
+  let round = 0;
+  while (selected.length < limit) {
+    let addedInRound = false;
+    for (const sourceItems of groups.values()) {
+      if (sourceItems[round]) {
+        selected.push(sourceItems[round]);
+        addedInRound = true;
+        if (selected.length === limit) break;
+      }
+    }
+    if (!addedInRound) break;
+    round += 1;
+  }
+  return selected;
+}
+
+function getPracticeArea(item = {}) {
+  const text = `${item.title || ''} ${item.snippet || ''} ${item.category || ''} ${item.source || ''}`.toLowerCase();
+  const areas = [
+    ['Penal i seguretat', ['codi penal', 'delicte', 'penal', 'policia', 'penitenciari', 'violència de gènere', 'violència domèstica']],
+    ['Laboral i immigració', ['laboral', 'treball', 'immigració', 'quota especial', 'autorització de residència', 'salari', 'ocupació']],
+    ['Fiscal i duaner', ['fiscal', 'tribut', 'impost', 'taxa', 'duana', 'tabac', 'pressupost']],
+    ['Mercantil i societari', ['mercantil', 'societ', 'empresa', 'comerç', 'actius digitals', 'blockchain', 'insolvència']],
+    ['Habitatge i urbanisme', ['habitatge', 'arrendament', 'lloguer', 'urbanisme', 'immobiliari', 'edifici']],
+    ['Administratiu i contractació pública', ['administració', 'adjudicació', 'contracte públic', 'concurs públic', 'funció pública', 'edicte']],
+    ['Protecció de dades i digital', ['protecció de dades', 'privacitat', 'ciber', 'intel·ligència artificial', 'digital', 'tecnologia']],
+    ['Financer i assegurances', ['afa', 'financer', 'banc', 'asseguran', 'blanqueig', 'ràting', 'rating', 'fmi', 'moody', 'fitch']],
+    ['Unió Europea i internacional', ['unió europea', 'acord d’associació', "acord d'associació", 'tractat', 'internacional', 'conveni']],
+    ['Justícia i procediment', ['administració de justícia', 'consell superior de la justícia', 'procediment', 'jurisdicció', 'tribunal']],
+    ['Família i persona', ['família', 'menor', 'capacitat', 'tutela', 'successió', 'nacionalitat']],
+    ['Salut i professions regulades', ['salut', 'sanitari', 'metge', 'farmà', 'professional regulat']],
+    ['Educació', ['educació', 'escolar', 'universitat', 'ensenyament', 'pla d’estudis']]
+  ];
+  const match = areas.find(([, keywords]) => keywords.some(keyword => text.includes(keyword)));
+  return match ? match[0] : 'General i institucional';
+}
+
+async function getBopaEntryIntoForce(documentUrl) {
+  try {
+    const response = await fetch(documentUrl);
+    if (!response.ok) return null;
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    let entryIntoForce = null;
+
+    $('p').each((_, element) => {
+      if (entryIntoForce) return;
+      const text = $(element).text().replace(/\s+/g, ' ').trim();
+      // Only capture an operative clause ("entra/entrarà en vigor").
+      // The noun phrase "entrada en vigor" is common in historical context,
+      // transitional provisions and repeal clauses, where it does not state
+      // when the current document becomes effective.
+      if (/\bentr(?:a|arà)\s+en\s+vigor\b/i.test(text)) {
+        entryIntoForce = text.slice(0, 360);
+      }
+    });
+
+    return entryIntoForce;
+  } catch (error) {
+    return null;
+  }
 }
 
 function fetchGovernHtml() {
@@ -485,7 +586,15 @@ async function scrapeBOPANews() {
       }
     }
 
-    return items.slice(0, 60);
+    const selectedItems = items.slice(0, 60);
+    const itemsToEnrich = selectedItems
+      .filter(item => item.legalRelevance === 'high')
+      .slice(0, 24);
+    await Promise.all(itemsToEnrich.map(async item => {
+      item.entryIntoForce = await getBopaEntryIntoForce(item.link);
+    }));
+
+    return selectedItems;
   } catch (error) {
     console.error("Error fetching BOPA official data:", error.message);
     return [];
@@ -549,6 +658,8 @@ async function fetchAllFeeds() {
     if (!item || !item.title || !item.link || !item.date || seenLinks.has(item.link)) return false;
     seenLinks.add(item.link);
     item.legalRelevance = item.legalRelevance || getLegalRelevance(item.title, item.category);
+    item.documentType = item.documentType || getDocumentType(item.title, item.category);
+    item.practiceArea = item.practiceArea || getPracticeArea(item);
     return true;
   });
 
@@ -659,14 +770,12 @@ async function getAiSummary(forceRefresh = false) {
     return aiSummaryCache;
   }
 
-  // Format news into text for Gemini (limit to 20 items for efficiency)
-  let newsForPrompt = weeklyNews;
-  if (newsForPrompt.length > 20) {
-    newsForPrompt = newsForPrompt.slice(0, 20);
-  }
+  // Balance the editorial sample so a high-volume source cannot crowd out
+  // the rest of the official channels.
+  const newsForPrompt = selectEditorialItems(weeklyNews, 24);
 
   const newsSummaryText = newsForPrompt.map((n, idx) => 
-    `[${idx + 1}] Font: ${n.source} | Data: ${n.date} | Categoria: ${n.category || 'General'}\nTítol: ${n.title}\nDescripció: ${n.snippet || ''}\nEnllaç: ${n.link || ''}\n`
+    `[${idx + 1}] Font: ${n.source} | Data: ${n.date} | Tipus: ${n.documentType} | Àrea: ${n.practiceArea}\nTítol: ${n.title}\nDescripció: ${n.snippet || ''}\nEntrada en vigor explícita: ${n.entryIntoForce || 'No identificada al document'}\nEnllaç: ${n.link || ''}\n`
   ).join('\n---\n');
 
   const prompt = `Ets l'editor jurídic d'un butlletí professional adreçat a advocats exercents del Principat d'Andorra.
@@ -732,6 +841,8 @@ Per a "noticiesAmbImpacte", selecciona fins a 6 publicacions i conserva exactame
   aiSummaryCache = {
     timestamp: new Date().toISOString(),
     itemsCount: weeklyNews.length,
+    sampledItemsCount: newsForPrompt.length,
+    sampledSources: [...new Set(newsForPrompt.map(item => item.sourceId))],
     ...summaryJson
   };
   aiSummaryTimestamp = Date.now();
@@ -812,6 +923,8 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
     const orig = allNewsItems.find(item => item.link === ai.link || item.title === ai.titol) || {};
     const sourceName = orig.source || "Actualitat";
     const category = orig.category || "General";
+    const practiceArea = orig.practiceArea || "General i institucional";
+    const documentType = orig.documentType || "Actualitat oficial";
     const articleLink = safeExternalUrl(ai.link);
     
     let badgeColor = "#64748b";
@@ -831,7 +944,7 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
                 ${escapeHtml(sourceName)}
               </span>
               <span class="category" style="color: #64748b; font-size: 12px; margin-left: 10px; font-family: 'Inter', sans-serif;">
-                • ${escapeHtml(category)}
+                • ${escapeHtml(documentType)} · ${escapeHtml(practiceArea)}
               </span>
             </td>
           </tr>
@@ -844,6 +957,10 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
         <p style="color: #475569; font-size: 14px; line-height: 1.5; margin-bottom: 12px; font-family: 'Inter', sans-serif;">
           ${escapeHtml(orig.snippet || "")}
         </p>
+        ${orig.entryIntoForce ? `
+        <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; line-height: 1.45; font-family: 'Inter', sans-serif;">
+          <strong>Entrada en vigor:</strong> ${escapeHtml(orig.entryIntoForce)}
+        </div>` : ''}
         <div class="impact-section" style="background-color: #f8fafc; border-left: 3px solid #3b82f6; padding: 10px 15px; border-radius: 0 8px 8px 0; margin-top: 10px;">
           <p style="margin: 0; font-size: 13px; font-style: italic; color: #1e293b; font-family: 'Inter', sans-serif; font-weight: 500;">
             <strong>Per què convé revisar-ho:</strong> ${escapeHtml(ai.impacte)}

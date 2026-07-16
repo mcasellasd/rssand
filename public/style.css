@@ -315,9 +315,30 @@ body {
 /* CONTROL PANEL */
 .control-panel {
     display: grid;
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: minmax(280px, 1.5fr) minmax(230px, 0.8fr) minmax(280px, 1fr);
     gap: 1.5rem;
     align-items: center;
+}
+
+.practice-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0 0.9rem;
+    min-height: 48px;
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.practice-filter select {
+    width: 100%;
+    border: 0;
+    outline: 0;
+    color: var(--text-primary);
+    background: var(--bg-dark);
+    font: 500 0.85rem var(--font-body);
 }
 
 @media (max-width: 768px) {
@@ -542,6 +563,16 @@ input:checked + .slider:before {
     gap: 0.5rem;
 }
 
+.practice-area-tag {
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    font-size: 0.66rem;
+    font-weight: 700;
+}
+
 .relevance-tag {
     padding: 0.3rem 0.6rem;
     border-radius: 999px;
@@ -570,6 +601,25 @@ input:checked + .slider:before {
     color: #6ee7b7;
     font-size: 0.75rem;
     font-weight: 600;
+}
+
+.entry-into-force {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    margin-bottom: 0.85rem;
+    padding: 0.7rem 0.8rem;
+    border-radius: 9px;
+    color: #bfdbfe;
+    background: rgba(59, 130, 246, 0.09);
+    border: 1px solid rgba(59, 130, 246, 0.18);
+    font-size: 0.76rem;
+    line-height: 1.45;
+}
+
+.entry-into-force i {
+    margin-top: 0.15rem;
+    color: #60a5fa;
 }
 
 /* BOPA MANUAL WARNING BOX */
