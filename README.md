@@ -1,4 +1,4 @@
-# Andorra Legal Brief
+# Actualitat Jurídica Andorrana
 
 Agregador i brief setmanal de novetats jurídiques andorranes procedents de fonts oficials.
 

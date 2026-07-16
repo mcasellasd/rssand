@@ -209,12 +209,12 @@ function buildLegalRss(items, generatedAt, options = {}) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
-    <title>${escapeXml(`Andorra Legal Brief${titleSuffix}`)}</title>
+    <title>${escapeXml(`Actualitat Jurídica Andorrana${titleSuffix}`)}</title>
     <link>${escapeXml(channelUrl)}</link>
     <description>${escapeXml(`Novetats legislatives i reguladores de fonts oficials d'Andorra per a la pràctica jurídica.${descriptionSuffix}`)}</description>
     <language>ca</language>
     <lastBuildDate>${new Date(generatedAt).toUTCString()}</lastBuildDate>
-    <generator>Andorra Legal Brief</generator>
+    <generator>Actualitat Jurídica Andorrana</generator>
     ${entries}
   </channel>
 </rss>`;
@@ -954,10 +954,7 @@ async function fetchAllFeeds() {
     { id: 'elperiodic', name: 'El Periòdic', url: 'https://elperiodic.ad/feed/', load: () => scrapeGenericRSS('https://elperiodic.ad/feed/', 'El Periòdic', 'elperiodic') },
     { id: 'andorraara', name: 'Andorra Ara', url: 'https://andorraara.com/ca/feed', load: () => scrapeGenericRSS('https://andorraara.com/ca/feed', 'Andorra Ara', 'andorraara') },
     { id: 'altaveu', name: 'Altaveu', url: 'https://www.altaveu.com/uploads/feeds/feed_altaveu_ca.xml', load: () => scrapeGenericRSS('https://www.altaveu.com/uploads/feeds/feed_altaveu_ca.xml', 'Altaveu', 'altaveu') },
-    { id: 'digitalandorra', name: 'Digital Andorra', url: 'https://digitalandorra.com/feed/', load: () => scrapeGenericRSS('https://digitalandorra.com/feed/', 'Digital Andorra', 'digitalandorra') },
-    { id: 'diariandorra', name: 'Diari d\'Andorra', url: 'https://www.diariandorra.ad/rss.xml', load: () => scrapeGenericRSS('https://www.diariandorra.ad/rss.xml', 'Diari d\'Andorra', 'diariandorra') },
-    { id: 'ana', name: 'ANA.ad', url: 'https://www.ana.ad/rss.xml', load: () => scrapeGenericRSS('https://www.ana.ad/rss.xml', 'ANA.ad', 'ana') },
-    { id: 'dondonzell', name: 'Don Donzell', url: 'https://dondonzell.com/feed/', load: () => scrapeGenericRSS('https://dondonzell.com/feed/', 'Don Donzell', 'dondonzell') }
+    { id: 'digitalandorra', name: 'Digital Andorra', url: 'https://digitalandorra.com/feed/', load: () => scrapeGenericRSS('https://digitalandorra.com/feed/', 'Digital Andorra', 'digitalandorra') }
   ];
   const checkedAt = new Date().toISOString();
   const results = await Promise.allSettled(sources.map(source => source.load()));
@@ -1439,7 +1436,7 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Andorra Legal Brief · Butlletí setmanal</title>
+  <title>Actualitat Jurídica Andorrana · Butlletí setmanal</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
     body {
@@ -1478,7 +1475,7 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
                     </td>
                   </tr>
                 </table>
-                <h1 style="color: #ffffff; font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; margin: 15px 0 5px 0; letter-spacing: -0.02em;">ANDORRA LEGAL BRIEF</h1>
+                <h1 style="color: #ffffff; font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; margin: 15px 0 5px 0; letter-spacing: -0.02em;">ACTUALITAT JURÍDICA ANDORRANA</h1>
                 <p style="color: #3b82f6; font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.1em;">Novetats per a la pràctica jurídica</p>
                 <p style="color: #94a3b8; font-size: 13px; margin: 0;">${dateFormatted}</p>
                 <p style="color: #bfdbfe; font-size: 12px; font-weight: 600; margin: 8px 0 0 0;">Àrea: ${escapeHtml(areaLabel)}</p>
@@ -1511,7 +1508,7 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
                   Síntesi elaborada a partir de fonts oficials d'Andorra. Contingut informatiu: cal consultar sempre el text oficial i no constitueix assessorament jurídic.
                 </p>
                 <p style="color: #94a3b8; font-size: 11px; margin: 0; font-family: 'Inter', sans-serif;">
-                  © 2026 Andorra Legal Brief.
+                  © 2026 Actualitat Jurídica Andorrana.
                 </p>
                 <div style="margin-top: 15px;">
                   <a href="https://rssand-production.up.railway.app" style="color: #3b82f6; text-decoration: none; font-size: 12px; font-weight: 600; font-family: 'Outfit', sans-serif;">
@@ -1546,7 +1543,7 @@ function generateNewsletterText(dateStr, editorialIntro, puntsClau, noticiesAmbI
 `;
   }).join('\n');
 
-  return `ANDORRA LEGAL BRIEF - Novetats per a la pràctica jurídica
+  return `ACTUALITAT JURÍDICA ANDORRANA - Novetats per a la pràctica jurídica
 Data: ${dateFormatted}
 Mètode editorial: ${methodLabel}
 Àrea: ${practiceArea === 'all' ? 'Totes les àrees de pràctica' : practiceArea}

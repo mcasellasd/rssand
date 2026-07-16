@@ -109,10 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'elperiodic': 'badge-premsa',
         'andorraara': 'badge-premsa',
         'altaveu': 'badge-premsa',
-        'digitalandorra': 'badge-premsa',
-        'diariandorra': 'badge-premsa',
-        'ana': 'badge-premsa',
-        'dondonzell': 'badge-premsa'
+        'digitalandorra': 'badge-premsa'
     };
 
     const sourceIcons = {
@@ -127,10 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'elperiodic': 'fa-newspaper',
         'andorraara': 'fa-newspaper',
         'altaveu': 'fa-newspaper',
-        'digitalandorra': 'fa-newspaper',
-        'diariandorra': 'fa-newspaper',
-        'ana': 'fa-newspaper',
-        'dondonzell': 'fa-newspaper'
+        'digitalandorra': 'fa-newspaper'
     };
 
     // FORMAT DATE (YYYY-MM-DD -> DD/MM/YYYY)
