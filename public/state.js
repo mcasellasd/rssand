@@ -52,6 +52,7 @@
                 isLegislative: item.isLegislative !== false,
                 officialDocument: Boolean(item.officialDocument),
                 entryIntoForce: item.entryIntoForce || null,
+                operativeDeadlines: Array.isArray(item.operativeDeadlines) ? item.operativeDeadlines.slice(0, 2) : [],
                 legalStage: item.legalStage || 'Seguiment',
                 professionalAction: item.professionalAction || null,
                 affectedProfiles: item.affectedProfiles || null,

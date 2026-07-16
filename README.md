@@ -60,6 +60,7 @@ Cada publicació incorpora una pauta editorial determinista i traçable:
 - fase jurídica o institucional del document;
 - perfils professionals o clients als quals pot interessar;
 - comprovacions suggerides segons el tipus documental, sense substituir la lectura de la font oficial.
+- possibles terminis operatius detectats com a fragments literals, sempre marcats perquè es comprovin al document oficial.
 
 La pestanya `Noves` mostra les publicacions aparegudes des de la visita anterior i `Pendents` permet desar localment les lectures que cal revisar. Aquest estat només es conserva al navegador de l’usuari.
 

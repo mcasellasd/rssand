@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   buildLegalRss,
   getProfessionalReview,
+  extractBopaDocumentSignals,
   normalizeSubscriptionRequest,
   generateNewsletterText
 } = require('../server');
@@ -19,6 +20,7 @@ const items = [
     snippet: 'Text oficial',
     affectedProfiles: 'Responsables del tractament',
     professionalAction: 'Revisar obligacions i terminis.',
+    operativeDeadlines: ['Cal presentar la comunicació dins dels 15 dies següents.'],
     isLegislative: true,
     legalRelevance: 'high'
   },
@@ -58,6 +60,7 @@ test('el feed general només inclou publicacions jurídicament rellevants', () =
   assert.match(xml, /document\?id=1&amp;lang=ca/);
   assert.match(xml, /Pot interessar a: Responsables del tractament/);
   assert.match(xml, /Revisió suggerida: Revisar obligacions i terminis/);
+  assert.match(xml, /Possibles terminis literals: Cal presentar la comunicació dins dels 15 dies/);
   assert.doesNotMatch(xml, /Actualitat institucional/);
 });
 
@@ -103,6 +106,21 @@ test('la pauta professional diferencia una iniciativa d’una norma publicada', 
   assert.match(law.affectedProfiles, /assessoria fiscal/i);
 });
 
+test('els senyals BOPA només capturen terminis amb actuació concreta', () => {
+  const signals = extractBopaDocumentSignals(`
+    <p>Aquesta Llei entrarà en vigor l’endemà de ser publicada.</p>
+    <p>Les persones interessades han de presentar la sol·licitud dins dels 15 dies hàbils següents a la notificació.</p>
+    <p>El projecte es va debatre durant un termini de 30 dies.</p>
+    <li>Les al·legacions es poden formular fins al 30 de setembre del 2026.</li>
+  `);
+
+  assert.match(signals.entryIntoForce, /entrarà en vigor/i);
+  assert.equal(signals.operativeDeadlines.length, 2);
+  assert.match(signals.operativeDeadlines[0], /presentar la sol·licitud/i);
+  assert.match(signals.operativeDeadlines[1], /al·legacions/i);
+  assert.doesNotMatch(signals.operativeDeadlines.join(' '), /projecte es va debatre/i);
+});
+
 test('la subscripció valida consentiment, correu i preferències', () => {
   assert.deepEqual(normalizeSubscriptionRequest({
     email: ' Advocada@Despatx.ad ',
@@ -143,5 +161,6 @@ test('la newsletter en text pla conserva fase, afectats i pauta de revisió', ()
 
   assert.match(text, /Fase: Publicat al BOPA/);
   assert.match(text, /Pot interessar a: Responsables del tractament/);
+  assert.match(text, /Possible termini \(comprovar al text oficial\): Cal presentar la comunicació dins dels 15 dies/);
   assert.match(text, /Per què convé revisar-ho: Revisar obligacions i terminis/);
 });

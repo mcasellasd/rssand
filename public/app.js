@@ -500,6 +500,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span><strong>Entrada en vigor:</strong> ${escapeHtml(item.entryIntoForce)}</span>
             </div>
         ` : '';
+        const operativeDeadlinesHtml = item.operativeDeadlines?.length ? `
+            <div class="operative-deadlines">
+                <div class="operative-deadlines-title"><i class="fa-solid fa-hourglass-half"></i> Possible termini — comprovar al text oficial</div>
+                ${item.operativeDeadlines.map(deadline => `<p>${escapeHtml(deadline)}</p>`).join('')}
+            </div>
+        ` : '';
         const professionalReviewHtml = item.professionalAction ? `
             <div class="professional-review">
                 <div><i class="fa-solid fa-user-tie"></i><span><strong>Pot interessar a:</strong> ${escapeHtml(item.affectedProfiles || 'professionals de l’àrea')}</span></div>
@@ -538,6 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 ${bopaIndicatorHtml}
                 ${entryIntoForceHtml}
+                ${operativeDeadlinesHtml}
                 
                 <p class="news-snippet">${escapeHtml(item.snippet || "Sense descripció disponible. Obriu la font oficial per consultar el contingut complet.")}</p>
                 ${professionalReviewHtml}

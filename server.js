@@ -27,7 +27,10 @@ const SUBSCRIPTION_RATE_WINDOW = 60 * 60 * 1000;
 const SUBSCRIPTION_RATE_LIMIT = 5;
 
 const BOPA_API_BASE = 'https://bopaazurefunctions.azurewebsites.net';
-const BOPA_DOCUMENTS_ENDPOINT = `${BOPA_API_BASE}/api/GetDocumentsByBOPA?code=g0LIbgotqEe94pypk8MWNTWr3ldcgMQ70o0fSarhINWwAzFuCnk3Lg==`;
+const BOPA_FUNCTION_CODE = (process.env.BOPA_FUNCTION_CODE || '').trim();
+const BOPA_DOCUMENTS_ENDPOINT = BOPA_FUNCTION_CODE
+  ? `${BOPA_API_BASE}/api/GetDocumentsByBOPA?code=${encodeURIComponent(BOPA_FUNCTION_CODE)}`
+  : `${BOPA_API_BASE}/api/GetDocumentsByBOPA`;
 const LEGAL_PRACTICE_AREAS = [
   'Penal i seguretat',
   'Laboral i immigració',
@@ -199,7 +202,8 @@ function buildLegalRss(items, generatedAt, options = {}) {
         item.snippet || 'Consulteu la publicació oficial.',
         item.affectedProfiles ? `Pot interessar a: ${item.affectedProfiles}.` : null,
         item.professionalAction ? `Revisió suggerida: ${item.professionalAction}` : null,
-        item.entryIntoForce ? `Entrada en vigor indicada al document: ${item.entryIntoForce}` : null
+        item.entryIntoForce ? `Entrada en vigor indicada al document: ${item.entryIntoForce}` : null,
+        item.operativeDeadlines?.length ? `Possibles terminis literals: ${item.operativeDeadlines.join(' ')}` : null
       ].filter(Boolean).join(' '))}</description>
     </item>
   `).join('');
@@ -263,6 +267,8 @@ function selectEditorialItems(items, limit = 24) {
   const sortedItems = [...items].sort((a, b) => {
     const relevanceDifference = (relevanceRank[b.legalRelevance] || 0) - (relevanceRank[a.legalRelevance] || 0);
     if (relevanceDifference !== 0) return relevanceDifference;
+    const deadlineDifference = Number(Boolean(b.operativeDeadlines?.length)) - Number(Boolean(a.operativeDeadlines?.length));
+    if (deadlineDifference !== 0) return deadlineDifference;
     return new Date(b.date) - new Date(a.date);
   });
 
@@ -466,29 +472,47 @@ function getProfessionalReview(item = {}) {
   };
 }
 
-async function getBopaEntryIntoForce(documentUrl) {
+function extractBopaDocumentSignals(html = '') {
+  const $ = cheerio.load(html);
+  const clipLiteral = (text, maxLength) => {
+    if (text.length <= maxLength) return text;
+    const clipped = text.slice(0, maxLength - 1);
+    const lastSpace = clipped.lastIndexOf(' ');
+    return `${clipped.slice(0, lastSpace > maxLength * 0.7 ? lastSpace : clipped.length).trim()}…`;
+  };
+  let entryIntoForce = null;
+  const operativeDeadlines = [];
+  const seenDeadlines = new Set();
+  const temporalSignal = /(?:\btermini\s+(?:màxim\s+)?(?:de\s+)?\d+\s+(?:dies?|mesos?|anys?)\b|\bdins\s+(?:dels?|el)\s+\d+\s+(?:dies?|mesos?|anys?)\b|\ba\s+comptar\s+(?:de|des de)\b|\bfins\s+(?:al|el|a la)\b|\babans\s+(?:del|de la)\b|\bno\s+més\s+tard\s+del\b)/i;
+  const actionSignal = /\b(?:presentar|presentació|sol·licitar|sol·licitud|recórrer|recurs|interposar|pagar|pagament|comunicar|comunicació|adaptar|adaptació|complir|inscriure|inscripció|formular|al·legacions|candidatures|ofertes|documentació|esmenar|respondre|comparèixer)\b/i;
+
+  $('p, li').each((_, element) => {
+    const text = $(element).text().replace(/\s+/g, ' ').trim();
+    if (!text || text.length < 25) return;
+
+    if (!entryIntoForce && /\bentr(?:a|arà)\s+en\s+vigor\b/i.test(text)) {
+      entryIntoForce = clipLiteral(text, 360);
+    }
+
+    if (operativeDeadlines.length >= 2 || !temporalSignal.test(text) || !actionSignal.test(text)) return;
+    const normalized = clipLiteral(text, 420);
+    const dedupeKey = normalized.toLocaleLowerCase('ca');
+    if (!seenDeadlines.has(dedupeKey)) {
+      seenDeadlines.add(dedupeKey);
+      operativeDeadlines.push(normalized);
+    }
+  });
+
+  return { entryIntoForce, operativeDeadlines };
+}
+
+async function getBopaDocumentSignals(documentUrl) {
   try {
     const response = await fetch(documentUrl);
-    if (!response.ok) return null;
-    const html = await response.text();
-    const $ = cheerio.load(html);
-    let entryIntoForce = null;
-
-    $('p').each((_, element) => {
-      if (entryIntoForce) return;
-      const text = $(element).text().replace(/\s+/g, ' ').trim();
-      // Only capture an operative clause ("entra/entrarà en vigor").
-      // The noun phrase "entrada en vigor" is common in historical context,
-      // transitional provisions and repeal clauses, where it does not state
-      // when the current document becomes effective.
-      if (/\bentr(?:a|arà)\s+en\s+vigor\b/i.test(text)) {
-        entryIntoForce = text.slice(0, 360);
-      }
-    });
-
-    return entryIntoForce;
+    if (!response.ok) return { entryIntoForce: null, operativeDeadlines: [] };
+    return extractBopaDocumentSignals(await response.text());
   } catch (error) {
-    return null;
+    return { entryIntoForce: null, operativeDeadlines: [] };
   }
 }
 
@@ -805,6 +829,7 @@ async function scrapeBOPANews() {
     const documentsByBulletin = await Promise.all(bulletins.map(async bulletin => {
       const date = new Date(bulletin.dataPublicacio);
       const year = date.getUTCFullYear();
+      if (!BOPA_FUNCTION_CODE) throw new Error('Missing BOPA_FUNCTION_CODE');
       const url = `${BOPA_DOCUMENTS_ENDPOINT}&numBOPA=${encodeURIComponent(bulletin.numBOPA)}&year=${year}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP error BOPA ${bulletin.numBOPA}: ${response.status}`);
@@ -832,6 +857,7 @@ async function scrapeBOPANews() {
           category,
           isLegislative: true,
           legalRelevance,
+          documentType: getDocumentType(title, category),
           officialDocument: true,
           bulletinNumber: bulletin.numBOPA
         });
@@ -839,11 +865,12 @@ async function scrapeBOPANews() {
     }
 
     const selectedItems = items.slice(0, 60);
+    const deadlineProneTypes = new Set(['Llei', 'Reglament', 'Decret', 'Resolució', 'Edicte', 'Avís']);
     const itemsToEnrich = selectedItems
-      .filter(item => item.legalRelevance === 'high')
-      .slice(0, 24);
+      .filter(item => item.legalRelevance === 'high' || deadlineProneTypes.has(item.documentType))
+      .slice(0, 36);
     await Promise.all(itemsToEnrich.map(async item => {
-      item.entryIntoForce = await getBopaEntryIntoForce(item.link);
+      Object.assign(item, await getBopaDocumentSignals(item.link));
     }));
 
     return selectedItems;
@@ -1123,7 +1150,7 @@ async function getAiSummary(forceRefresh = false, requestedPracticeArea = 'all')
   const newsForPrompt = selectEditorialItems(weeklyNews, 24);
 
   const newsSummaryText = newsForPrompt.map((n, idx) => 
-    `[${idx + 1}] Font: ${n.source} | Data: ${n.date} | Tipus: ${n.documentType} | Àrea: ${n.practiceArea}\nTítol: ${n.title}\nDescripció: ${n.snippet || ''}\nEntrada en vigor explícita: ${n.entryIntoForce || 'No identificada al document'}\nEnllaç: ${n.link || ''}\n`
+    `[${idx + 1}] Font: ${n.source} | Data: ${n.date} | Tipus: ${n.documentType} | Àrea: ${n.practiceArea}\nTítol: ${n.title}\nDescripció: ${n.snippet || ''}\nEntrada en vigor explícita: ${n.entryIntoForce || 'No identificada al document'}\nPossibles terminis literals: ${n.operativeDeadlines?.join(' | ') || 'No identificats al document'}\nEnllaç: ${n.link || ''}\n`
   ).join('\n---\n');
 
   const prompt = `Ets l'editor jurídic d'un butlletí professional adreçat a advocats exercents del Principat d'Andorra.
@@ -1133,7 +1160,7 @@ Edició sol·licitada: ${requestedArea === 'all' ? 'totes les àrees de pràctic
 Notícies de la setmana:
 ${newsSummaryText}
 
-No inventis dates d'entrada en vigor, terminis, obligacions, efectes jurídics ni conclusions que no constin en el material facilitat. Si una dada no es pot determinar, no l'afirmis.
+No inventis dates d'entrada en vigor, terminis, obligacions, efectes jurídics ni conclusions que no constin en el material facilitat. Els "possibles terminis literals" són fragments per comprovar, no una determinació jurídica: no n'ampliïs l'abast. Si una dada no es pot determinar, no l'afirmis.
 Prioritza lleis, reglaments, decrets, resolucions, jurisprudència, iniciatives legislatives i canvis regulatoris amb impacte professional.
 Per a "noticiesAmbImpacte", selecciona fins a 6 publicacions i conserva exactament el títol i l'enllaç originals. Explica en 1 o 2 frases què convé revisar o per què pot ser rellevant per a un despatx, sense donar assessorament jurídic ni extrapolar més enllà de la font.`;
 
@@ -1324,6 +1351,11 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
         <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; line-height: 1.45; font-family: 'Inter', sans-serif;">
           <strong>Entrada en vigor:</strong> ${escapeHtml(orig.entryIntoForce)}
         </div>` : ''}
+        ${orig.operativeDeadlines?.length ? `
+        <div style="background-color: #fffbeb; border: 1px solid #fde68a; color: #78350f; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; line-height: 1.45; font-family: 'Inter', sans-serif;">
+          <strong>Possible termini — comprovar al text oficial:</strong>
+          ${orig.operativeDeadlines.map(deadline => `<div style="margin-top: 5px;">${escapeHtml(deadline)}</div>`).join('')}
+        </div>` : ''}
         ${orig.affectedProfiles ? `
         <div style="color: #475569; font-size: 13px; line-height: 1.45; margin: 0 0 12px 0; font-family: 'Inter', sans-serif;">
           <strong>Pot interessar a:</strong> ${escapeHtml(orig.affectedProfiles)}
@@ -1444,7 +1476,7 @@ function generateNewsletterText(dateStr, editorialIntro, puntsClau, noticiesAmbI
     return `${idx + 1}. ${ai.titol}
    Fase: ${original.legalStage || 'Seguiment'}
    Pot interessar a: ${original.affectedProfiles || 'Professionals de l’àrea'}
-   Enllaç: ${ai.link}
+   ${original.operativeDeadlines?.length ? `Possible termini (comprovar al text oficial): ${original.operativeDeadlines.join(' | ')}\n   ` : ''}Enllaç: ${ai.link}
    Per què convé revisar-ho: ${ai.impacte}
 `;
   }).join('\n');
@@ -1566,6 +1598,7 @@ module.exports = {
   app,
   buildLegalRss,
   getProfessionalReview,
+  extractBopaDocumentSignals,
   normalizeSubscriptionRequest,
   getEmailSubscriptionConfig,
   generateNewsletterText
