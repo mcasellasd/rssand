@@ -222,20 +222,50 @@ function buildLegalRss(items, generatedAt, options = {}) {
 
 function getLegalRelevance(title = '', category = '') {
   const text = `${title} ${category}`.toLowerCase();
+
   const highKeywords = [
     'llei', 'reglament', 'decret', 'codi', 'tractat', 'conveni internacional',
     'sentència', 'aute', 'jurisprud', 'constitucional', 'correcció d’errata',
-    "correcció d'errata"
+    "correcció d'errata", 'recurs d’empara', 'decret legislatiu'
   ];
+
+  if (highKeywords.some(keyword => text.includes(keyword))) return 'high';
+
+  const discardKeywords = [
+    'recepció', 'visita', 'exposició cultural', 'exposició artística', 'cultural',
+    'protocol', 'concert', 'presentació de llibre', 'cos consular', 'llibre', 'apf',
+    'yaoundé', 'camerun', 'premi', 'homenatge', 'escola', 'estudiant', 'visiten',
+    'concurs de dibuix', 'torneig', 'esportiu', 'festa major', 'festivitat',
+    'congrés mèdic', 'conferència', 'futbol', 'basquet', 'bàsquet', 'esquí',
+    'agenda', 'clima', 'meteorologia', 'música', 'teatre', 'cinema', 'consell d’infants'
+  ];
+
+  if (discardKeywords.some(keyword => text.includes(keyword))) {
+    return 'low';
+  }
+
   const mediumKeywords = [
     'edicte', 'resolució', 'autorització', 'quota', 'concurs públic', 'subvenció',
     'ajut', 'fiscal', 'tribut', 'impost', 'habitatge', 'immigració', 'laboral',
     'protecció de dades', 'sanció', 'nacionalitat', 'administració de justícia',
-    'regulació', "acord d'associació", 'acord d’associació', 'unió europea'
+    'regulació', "acord d'associació", 'acord d’associació', 'unió europea',
+    'procediment', 'jurisdicció', 'tribunal', 'adjudicació', 'contracte públic',
+    'notaria', 'registre civil', 'procurador', 'advocat', 'fiscalia',
+    'anunci', 'avís', 'avís de licitació', 'oferta de treball', 'funció pública',
+    'convocatòria', 'examen'
   ];
 
-  if (highKeywords.some(keyword => text.includes(keyword))) return 'high';
-  return 'medium';
+  if (mediumKeywords.some(keyword => text.includes(keyword))) return 'medium';
+
+  // If it's a known official category but doesn't match keywords, maybe it's still medium
+  const officialCategories = [
+    'Govern', 'Disposicions oficials', 'Actualitat oficial', 'Acord d\'Associació',
+    'Legislatiu / Normatiu', 'Activitat Parlamentària', 'Protecció de Dades',
+    'IA / Tecnologia', 'Sancions / Resolucions', 'Regulació Financera'
+  ];
+  if (officialCategories.includes(category) || category.startsWith('Comú de') || category.startsWith('BOPA')) return 'medium';
+
+  return 'low';
 }
 
 function getDocumentType(title = '', category = '') {
@@ -998,7 +1028,11 @@ async function fetchAllFeeds() {
   const normalizedItems = allItems.filter(item => {
     if (!item || !item.title || !item.link || !item.date || seenLinks.has(item.link)) return false;
     seenLinks.add(item.link);
-    item.legalRelevance = item.legalRelevance || getLegalRelevance(item.title, item.category);
+    
+    const relevance = getLegalRelevance(item.title, item.category);
+    if (relevance === 'low') return false;
+
+    item.legalRelevance = item.legalRelevance || relevance;
     item.documentType = item.documentType || getDocumentType(item.title, item.category);
     item.practiceArea = item.practiceArea || getPracticeArea(item);
     Object.assign(item, getProfessionalReview(item));

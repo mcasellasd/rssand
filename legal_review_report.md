@@ -99,3 +99,26 @@ Per blindar completament la plataforma i assegurar el conformitat del 100% de le
 1. **Redactar i publicar la Política de Privacitat:** Assegurar que la URL del `PRIVACY_POLICY_URL` contingui el detall complet del tractament, incloent-hi de forma explícita el tractament de l'adreça IP per a motius de seguretat (interès legítim) i el fet que les dades de subscripció s'envien a un processador extern per gestionar l'enviament de correus (encarregat del tractament).
 2. **Redactar les Condicions d'Ús i avís de limitació de responsabilitat (Disclaimer):** Penjar un enllaç al peu de pàgina detallant que la plataforma és un agregador d'informació i que l'usuari assumeix la responsabilitat de qualsevol acció jurídica que realitzi, obligant-se a contrastar les dades amb els Butlletins Oficials corresponents.
 3. **Reforçar l'avís de terminis al web:** Afegir un text breu a la fitxa dels documents on es llegeixi un possible termini operatiu (p. ex. *"Terminis aproximats extrets per via algorítmica. Valideu-los al document BOPA oficial"*).
+
+---
+
+## Annex: Implicacions d'un botó interactiu de "Resum amb IA" on-demand
+
+Si decideixes implementar un botó que permeti als usuaris demanar un resum amb IA d'una notícia concreta en temps real, s'activen nous riscos jurídics i tècnics:
+
+### A. Propietat Intel·lectual (Drets d'Autor de la Premsa)
+* **Fonts Oficials (BOPA/Govern):** Cap problema legal. Pots resumir lleis, decrets o edictes de forma íntegra.
+* **Mitjans de Premsa Privats (Diari d'Andorra, Altaveu, etc.):** 
+  * Per resumir la notícia, el teu servidor hauria de descarregar (fer *scraping*) del contingut complet de l'article privat.
+  * Si la IA genera un resum gairebé complet del contingut, pot buidar de sentit que l'usuari visiti la web del mitjà original (pèrdua de trànsit i ingressos publicitaris per al mitjà). Això pot ser interpretat com a **infracció de drets d'autor** (creació d'obra derivada) i **competència deslleial** (parasitisme).
+  * **Recomanació:** Limita el botó de "Resum amb IA" **únicament a documents oficials** (BOPA) i exclou els articles de mitjans privats.
+
+### B. Absència de Validació Humana i Major Risc de Responsabilitat
+* En el butlletí setmanal, tu com a administrador pots supervisar la sortida abans d'enviar-la o configurar regles específiques.
+* En un botó en temps real, l'usuari rep directament el resultat de la IA. Qualsevol al·lucinació de terminis o drets pot provocar directament una acció errònia de l'advocat, el qual augmenta el risc que et responsabilitzin per negligència si no hi ha advertències clares.
+* **Recomanació:** Mostra un avís prominent i visible just sota el resum generat: *“Aquest resum ha estat generat automàticament per una Intel·ligència Artificial en temps real i no ha estat revisat. No constitueix assessorament jurídic. Valideu la informació amb la font original.”*
+
+### C. Consum de l'API i Seguretat (Denegació de Servei)
+* Un botó exposat a qualsevol usuari de la web permet que qualsevol bot o usuari maliciós faci milers de clics seguits per esgotar la teva quota gratuïta de l'API de Gemini o generar-te costos econòmics elevats.
+* **Recomanació:** Implementar obligatòriament limitació de ràtio (*rate limiting*) a l'endpoint del servidor que crida a Gemini, filtrant per adreça IP de l'usuari sol·licitant.
+

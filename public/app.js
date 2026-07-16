@@ -573,9 +573,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="btn-action-text btn-save ${isSaved ? 'is-saved' : ''}" type="button" aria-pressed="${isSaved}" title="${isSaved ? 'Treure de pendents' : 'Desar per revisar'}">
                         <i class="${isSaved ? 'fa-solid' : 'fa-regular'} fa-bookmark"></i> ${isSaved ? 'Desat' : 'Desar'}
                     </button>
-                    <button class="btn-action-text btn-expand" title="Ampliar descripció">
-                        <i class="fa-solid fa-circle-chevron-down"></i> Ampliar
-                    </button>
+                    ${item.officialDocument ? `
+                    <button class="btn-action-text btn-expand" title="Resum amb IA">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Resum IA
+                    </button>` : ''}
                     <a href="${safeLink}" target="_blank" rel="noopener noreferrer" class="btn-action-link" title="Consultar la font oficial">
                         Font oficial <i class="fa-solid fa-arrow-up-right-from-square"></i>
                     </a>
@@ -587,15 +588,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Expand/Collapse event listener
         const expandBtn = card.querySelector('.btn-expand');
-        const snippet = card.querySelector('.news-snippet');
-        expandBtn.addEventListener('click', () => {
-            snippet.classList.toggle('expanded');
-            if (snippet.classList.contains('expanded')) {
-                expandBtn.innerHTML = `<i class="fa-solid fa-circle-chevron-up"></i> Reduir`;
-            } else {
-                expandBtn.innerHTML = `<i class="fa-solid fa-circle-chevron-down"></i> Ampliar`;
-            }
-        });
+        if (expandBtn) {
+            const snippet = card.querySelector('.news-snippet');
+            expandBtn.addEventListener('click', () => {
+                snippet.classList.toggle('expanded');
+                if (snippet.classList.contains('expanded')) {
+                    expandBtn.innerHTML = `<i class="fa-solid fa-circle-chevron-up"></i> Tancar`;
+                } else {
+                    expandBtn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Resum IA`;
+                }
+            });
+        }
 
         return card;
     }
