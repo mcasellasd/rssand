@@ -990,8 +990,11 @@ function safeExternalUrl(value) {
 }
 
 // Generate HTML Newsletter Template with responsive and inline styles
-function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbImpacte, allNewsItems) {
+function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbImpacte, allNewsItems, editorialMode) {
   const dateFormatted = parseDateToCatalan(dateStr);
+  const methodLabel = editorialMode === 'ai'
+    ? 'Edició assistida per IA sobre fonts oficials'
+    : 'Síntesi automàtica de fonts oficials';
   
   const pointsHtml = puntsClau.map(pt => `
     <li style="margin-bottom: 8px; color: #334155; font-size: 15px; line-height: 1.5; font-family: 'Inter', sans-serif;">
@@ -1097,6 +1100,7 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
                 <h1 style="color: #ffffff; font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; margin: 15px 0 5px 0; letter-spacing: -0.02em;">ANDORRA LEGAL BRIEF</h1>
                 <p style="color: #3b82f6; font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.1em;">Novetats per a la pràctica jurídica</p>
                 <p style="color: #94a3b8; font-size: 13px; margin: 0;">${dateFormatted}</p>
+                <p style="display: inline-block; color: #cbd5e1; background-color: rgba(255,255,255,0.08); border-radius: 999px; padding: 5px 10px; font-size: 11px; margin: 12px 0 0 0;">${methodLabel}</p>
               </td>
             </tr>
             <tr>
@@ -1144,8 +1148,11 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
 }
 
 // Generate Plain Text Fallback Version of the Newsletter
-function generateNewsletterText(dateStr, editorialIntro, puntsClau, noticiesAmbImpacte) {
+function generateNewsletterText(dateStr, editorialIntro, puntsClau, noticiesAmbImpacte, editorialMode) {
   const dateFormatted = parseDateToCatalan(dateStr);
+  const methodLabel = editorialMode === 'ai'
+    ? 'Edició assistida per IA sobre fonts oficials'
+    : 'Síntesi automàtica de fonts oficials';
   const pointsText = puntsClau.map(pt => `• ${pt}`).join('\n');
   const articlesText = noticiesAmbImpacte.map((ai, idx) => {
     return `${idx + 1}. ${ai.titol}\n   Enllaç: ${ai.link}\n   Per què convé revisar-ho: ${ai.impacte}\n`;
@@ -1153,6 +1160,7 @@ function generateNewsletterText(dateStr, editorialIntro, puntsClau, noticiesAmbI
 
   return `ANDORRA LEGAL BRIEF - Novetats per a la pràctica jurídica
 Data: ${dateFormatted}
+Mètode editorial: ${methodLabel}
 ==================================================
 
 RESUM DE LA SETMANA:
@@ -1203,7 +1211,9 @@ app.get('/api/news/newsletter', async (req, res) => {
     const newsletterData = {
       editorialIntro: summary.resumExecutiu,
       puntsClau: summary.puntsClau,
-      noticiesAmbImpacte: summary.noticiesAmbImpacte
+      noticiesAmbImpacte: summary.noticiesAmbImpacte,
+      editorialMode: summary.editorialMode,
+      editorialNote: summary.editorialNote
     };
 
     const htmlContent = generateNewsletterHtml(
@@ -1211,14 +1221,16 @@ app.get('/api/news/newsletter', async (req, res) => {
       newsletterData.editorialIntro,
       newsletterData.puntsClau,
       newsletterData.noticiesAmbImpacte,
-      weeklyNews
+      weeklyNews,
+      newsletterData.editorialMode
     );
 
     const textContent = generateNewsletterText(
       latestDate,
       newsletterData.editorialIntro,
       newsletterData.puntsClau,
-      newsletterData.noticiesAmbImpacte
+      newsletterData.noticiesAmbImpacte,
+      newsletterData.editorialMode
     );
 
     res.json({
