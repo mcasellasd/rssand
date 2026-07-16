@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lector RSS & Actualitat Legislativa d'Andorra</title>
+    <title>Andorra Legal Brief · Novetats jurídiques</title>
+    <link rel="alternate" type="application/rss+xml" title="Andorra Legal Brief RSS" href="/feed.xml">
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,6 +37,9 @@
             
             <div class="header-controls">
                 <span id="cache-status" class="cache-badge"><i class="fa-solid fa-spinner fa-spin"></i> Carregant...</span>
+                <a class="rss-subscribe-btn" href="/feed.xml" target="_blank" rel="noopener noreferrer" title="Subscriure's al feed jurídic RSS">
+                    <i class="fa-solid fa-rss"></i> RSS
+                </a>
                 <button id="btn-source-status" class="source-status-btn" type="button" aria-expanded="false" aria-controls="source-status-panel">
                     <i class="fa-solid fa-circle-notch fa-spin"></i> Fonts
                 </button>

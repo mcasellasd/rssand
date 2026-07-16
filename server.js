@@ -80,6 +80,46 @@ function decodeBopaText(value = '') {
   }
 }
 
+function escapeXml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function buildLegalRss(items, generatedAt) {
+  const legalItems = items
+    .filter(item => item.isLegislative !== false && item.legalRelevance !== 'low')
+    .slice(0, 75);
+  const channelUrl = 'https://rssand-production.up.railway.app/';
+  const entries = legalItems.map(item => `
+    <item>
+      <title>${escapeXml(item.title)}</title>
+      <link>${escapeXml(item.link)}</link>
+      <guid isPermaLink="true">${escapeXml(item.link)}</guid>
+      <pubDate>${new Date(`${item.date}T12:00:00Z`).toUTCString()}</pubDate>
+      <category>${escapeXml(item.category || 'Actualitat jurídica')}</category>
+      <source url="${escapeXml(item.link)}">${escapeXml(item.source || 'Font oficial')}</source>
+      <description>${escapeXml(item.snippet || 'Consulteu la publicació oficial.')}</description>
+    </item>
+  `).join('');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Andorra Legal Brief</title>
+    <link>${channelUrl}</link>
+    <description>Novetats legislatives i reguladores de fonts oficials d'Andorra per a la pràctica jurídica.</description>
+    <language>ca</language>
+    <lastBuildDate>${new Date(generatedAt).toUTCString()}</lastBuildDate>
+    <generator>Andorra Legal Brief</generator>
+    ${entries}
+  </channel>
+</rss>`;
+}
+
 function getLegalRelevance(title = '', category = '') {
   const text = `${title} ${category}`.toLowerCase();
   const highKeywords = [
@@ -563,6 +603,20 @@ app.get('/api/health', (req, res) => {
     totalSources,
     sources: sourceHealthCache
   });
+});
+
+app.get('/feed.xml', async (req, res) => {
+  try {
+    let items = newsCache;
+    if (!items || !cacheTimestamp || (Date.now() - cacheTimestamp > CACHE_DURATION)) {
+      items = await fetchAllFeeds();
+    }
+    res.type('application/rss+xml; charset=utf-8');
+    res.send(buildLegalRss(items, cacheTimestamp || Date.now()));
+  } catch (error) {
+    console.error("Error generant el feed RSS jurídic:", error);
+    res.status(500).type('text/plain').send("No s'ha pogut generar el feed RSS.");
+  }
 });
 
 // Helper function to generate and cache weekly AI Summary
