@@ -29,8 +29,8 @@
             <div class="logo-area">
                 <div class="logo-icon"><i class="fa-solid fa-scale-balanced"></i></div>
                 <div>
-                    <h1>Andorra <span>RSS Reader</span></h1>
-                    <p class="subtitle">Seguiment legislatiu, normatiu i institucional del Principat</p>
+                    <h1>Andorra <span>Legal Brief</span></h1>
+                    <p class="subtitle">Novetats legislatives i reguladores per a la pràctica jurídica</p>
                 </div>
             </div>
             
@@ -52,8 +52,8 @@
             
             <div class="filter-controls">
                 <div class="toggle-container">
-                    <span class="toggle-label" title="Amaga notícies del Consell General catalogades com actes protocol·laris o culturals">
-                        Filtrar notícies del Consell General (Només normatiu)
+                    <span class="toggle-label" title="Prioritza les publicacions amb impacte jurídic alt o que requereixen seguiment professional">
+                        Mostrar només novetats amb rellevància jurídica
                     </span>
                     <label class="switch">
                         <input type="checkbox" id="cg-filter-toggle" checked>
@@ -72,8 +72,8 @@
                 <button class="tab-btn" data-tab="consell_noticies">
                     <i class="fa-solid fa-landmark"></i> Consell General
                 </button>
-                <button class="tab-btn" data-tab="consell_iniciatives">
-                    <i class="fa-solid fa-file-signature"></i> Iniciatives
+                <button class="tab-btn" data-tab="tramitacio">
+                    <i class="fa-solid fa-file-signature"></i> Tramitació legislativa
                 </button>
                 <button class="tab-btn" data-tab="apda">
                     <i class="fa-solid fa-shield-halved"></i> APDA
@@ -88,10 +88,10 @@
                     <i class="fa-solid fa-coins"></i> AFA
                 </button>
                 <button class="tab-btn" data-tab="bopa">
-                    <i class="fa-solid fa-scroll"></i> BOPA <span class="badge-pending">Revisió</span>
+                    <i class="fa-solid fa-scroll"></i> BOPA <span class="badge-official">Oficial</span>
                 </button>
                 <button class="tab-btn" data-tab="newsletter">
-                    <i class="fa-solid fa-envelope-open-text"></i> Butlletí Diari
+                    <i class="fa-solid fa-envelope-open-text"></i> Butlletí Setmanal
                 </button>
             </div>
         </nav>
@@ -100,8 +100,8 @@
         <div id="bopa-alert" class="alert-box glass-card hide">
             <div class="alert-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
             <div class="alert-body">
-                <h3>Atenció: Revisió Manual Pendent del BOPA</h3>
-                <p>El portal oficial del <strong>Butlletí Oficial del Principat d'Andorra (BOPA)</strong> utilitza arquitectura de client JavaScript que no és accessible via scraper directe. Les notícies següents s'obtenen a partir de cerques web de contingut setmanal indexat. Es recomana fer un control manual a la font oficial.</p>
+                <h3>Documents oficials del BOPA</h3>
+                <p>Els resultats s'obtenen de l'API pública que alimenta el portal oficial i enllacen directament amb cada document publicat. La selecció prioritza lleis, reglaments, decrets i disposicions amb interès jurídic.</p>
                 <div class="alert-actions">
                     <a href="https://www.bopa.ad" target="_blank" class="btn-alert-link">
                         <i class="fa-solid fa-arrow-up-right-from-square"></i> Anar a bopa.ad
@@ -118,8 +118,8 @@
                     <div class="ai-title-area">
                         <div class="ai-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
                         <div>
-                            <h2>Resum Setmanal amb IA</h2>
-                            <p class="ai-subtitle">Síntesi intel·ligent de l'actualitat legislativa i institucional d'Andorra dels darrers 7 dies</p>
+                            <h2>Brief jurídic setmanal</h2>
+                            <p class="ai-subtitle">Síntesi professional de fonts oficials, orientada a la pràctica jurídica andorrana</p>
                         </div>
                     </div>
                     <button id="btn-ai-summary" class="btn-ai-summary">
@@ -174,8 +174,8 @@
                     <div class="newsletter-title-area">
                         <div class="newsletter-icon"><i class="fa-solid fa-envelope-open-text"></i></div>
                         <div>
-                            <h2>Butlletí Diari d'Andorra</h2>
-                            <p class="newsletter-subtitle">Genera un correu maquetat en HTML amb les novetats dels canals oficials</p>
+                            <h2>Butlletí Jurídic Setmanal</h2>
+                            <p class="newsletter-subtitle">Correu maquetat amb les novetats oficials que poden requerir revisió del despatx</p>
                         </div>
                     </div>
                     <button id="btn-generate-newsletter" class="btn-refresh">
@@ -277,7 +277,7 @@
 
         <!-- Footer -->
         <footer class="app-footer">
-            <p>&copy; 2026 Andorra RSS Reader - Seguiment Parlamentari i Regulador. Fet per a consulta personal.</p>
+            <p>&copy; 2026 Andorra Legal Brief · Fonts oficials · Síntesi informativa, no assessorament jurídic.</p>
             <p class="technical-info">Dades obtingudes dels portals del Consell General, Govern d'Andorra, APDA, AndorraUE, AFA i BOPA.</p>
         </footer>
     </div>

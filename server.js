@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cheerio = require('cheerio');
-const fs = require('fs');
+const https = require('https');
 const path = require('path');
 const { GoogleGenAI } = require('@google/genai');
 
@@ -19,76 +19,8 @@ const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
 let aiSummaryCache = null;
 let aiSummaryTimestamp = null;
 
-// Pre-seeded news for fallback and JS-heavy sites (Govern, BOPA)
-const PRESEEDED_NEWS = {
-  govern: [
-    {
-      source: "Govern d'Andorra",
-      sourceId: "govern",
-      title: "El Govern acorda l'actualització del salari mínim d'acord amb la inflació per al 2026",
-      link: "https://www.govern.ad/ca/actualitat",
-      date: "2026-07-10",
-      snippet: "L'Executiu aprova les directrius per al càlcul de l'increment salarial basat en l'IPC de l'any actual, protegint el poder adquisitiu dels sectors més vulnerables.",
-      category: "Legislació",
-      isLegislative: true
-    },
-    {
-      source: "Govern d'Andorra",
-      sourceId: "govern",
-      title: "S'entra a tràmit parlamentari de màxima urgència el Projecte de llei de mesures temporals per fer front a l'increment dels preus dels carburants",
-      link: "https://www.govern.ad/ca/actualitat",
-      date: "2026-07-08",
-      snippet: "El Consell de Ministres aprova el text per implementar bonificacions fiscals directes sobre el preu de venda al públic dels hidrocarburs.",
-      category: "Projecte de Llei",
-      isLegislative: true
-    },
-    {
-      source: "Govern d'Andorra",
-      sourceId: "govern",
-      title: "El Govern presenta el nou Reglament regulador de les condicions d'acreditació dels professionals de la salut",
-      link: "https://www.govern.ad/ca/actualitat",
-      date: "2026-07-01",
-      snippet: "Aprovat el Decret 258/2026 de modificació del Reglament per actualitzar les exigències formatives i de competències per a metges estrangers.",
-      category: "Decret",
-      isLegislative: true
-    }
-  ],
-  bopa: [
-    {
-      source: "BOPA (Revisió manual)",
-      sourceId: "bopa",
-      title: "Decret 258/2026, de l'1-7-2026, de modificació del Reglament d'acreditació dels professionals de la salut",
-      link: "https://www.bopa.ad/bopa/077073/Pagines/default.aspx",
-      date: "2026-07-07",
-      snippet: "Publicació al BOPA núm. 77 de la modificació dels criteris d'acreditació professional sanitària per a la incorporació de metges especialistes.",
-      category: "BOPA - Decrets",
-      isLegislative: true,
-      manualReview: true
-    },
-    {
-      source: "BOPA (Revisió manual)",
-      sourceId: "bopa",
-      title: "Decret 256/2026, de l'1-7-2026, pel qual s'aprova la modificació de la Cartera de serveis i productes de salut",
-      link: "https://www.bopa.ad/bopa/077073/Pagines/default.aspx",
-      date: "2026-07-07",
-      snippet: "Publicació oficial de la modificació de la llista de prestacions mèdiques cobertes per la CASS en l'àmbit de la rehabilitació funcional.",
-      category: "BOPA - Decrets",
-      isLegislative: true,
-      manualReview: true
-    },
-    {
-      source: "BOPA (Revisió manual)",
-      sourceId: "bopa",
-      title: "Butlletí Oficial del Principat d'Andorra (BOPA) - Publicació del Butlletí Ordinari núm. 77",
-      link: "https://www.bopa.ad",
-      date: "2026-07-07",
-      snippet: "Inclou acords parlamentaris, de l'Administració General i dels Comuns. Sessió del Consell de Ministres reguladora de preus públics.",
-      category: "BOPA - Butlletí",
-      isLegislative: true,
-      manualReview: true
-    }
-  ]
-};
+const BOPA_API_BASE = 'https://bopaazurefunctions.azurewebsites.net';
+const BOPA_DOCUMENTS_ENDPOINT = `${BOPA_API_BASE}/api/GetDocumentsByBOPA?code=g0LIbgotqEe94pypk8MWNTWr3ldcgMQ70o0fSarhINWwAzFuCnk3Lg==`;
 
 // Map Catalan month names to numbers (0-11)
 const CATALAN_MONTHS = {
@@ -98,7 +30,7 @@ const CATALAN_MONTHS = {
 
 // Helper function to parse Catalan date strings into ISO format
 function parseCatalanDate(dateStr) {
-  if (!dateStr) return new Date().toISOString().split('T')[0];
+  if (!dateStr) return null;
   
   // Format: "12/07/2026" or "12-07-2026"
   const regexSlash = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/;
@@ -112,7 +44,7 @@ function parseCatalanDate(dateStr) {
 
   // Format: "Yaounde (Camerun), 12 de juliol del 2026" or "30 d'abril del 2026" or "11 de juny a les 2026"
   const cleanedStr = dateStr.toLowerCase().replace(/,/g, ' ');
-  const regexText = /(\d{1,2})\s+(de|d’|d')\s*([a-zç]+)\s+(del|de|a les)\s+(\d{4})/;
+  const regexText = /(\d{1,2})\s+(de|d’|d')\s*([a-zç]+)(?:\s+(del|de|a les))?\s+(\d{4})/;
   const matchText = cleanedStr.match(regexText);
   if (matchText) {
     const day = matchText[1].padStart(2, '0');
@@ -135,8 +67,66 @@ function parseCatalanDate(dateStr) {
     // Ignore error and fall back
   }
 
-  // Fallback to today
-  return new Date().toISOString().split('T')[0];
+  // An unknown date must never be presented as if it were published today.
+  return null;
+}
+
+function decodeBopaText(value = '') {
+  try {
+    return decodeURIComponent(value.replace(/\+/g, ' ')).replace(/\s+/g, ' ').trim();
+  } catch (error) {
+    return value.replace(/\+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+}
+
+function getLegalRelevance(title = '', category = '') {
+  const text = `${title} ${category}`.toLowerCase();
+  const highKeywords = [
+    'llei', 'reglament', 'decret', 'codi', 'tractat', 'conveni internacional',
+    'sentència', 'aute', 'jurisprud', 'constitucional', 'correcció d’errata',
+    "correcció d'errata"
+  ];
+  const mediumKeywords = [
+    'edicte', 'resolució', 'autorització', 'quota', 'concurs públic', 'subvenció',
+    'ajut', 'fiscal', 'tribut', 'impost', 'habitatge', 'immigració', 'laboral',
+    'protecció de dades', 'sanció', 'nacionalitat', 'administració de justícia',
+    'regulació', "acord d'associació", 'acord d’associació', 'unió europea'
+  ];
+
+  if (highKeywords.some(keyword => text.includes(keyword))) return 'high';
+  if (mediumKeywords.some(keyword => text.includes(keyword))) return 'medium';
+  return 'low';
+}
+
+function fetchGovernHtml() {
+  return new Promise((resolve, reject) => {
+    // govern.ad currently serves a certificate chain that Node rejects while
+    // browsers accept it. Keep this exception isolated to this exact host.
+    const request = https.get('https://www.govern.ad/ca/actualitat', {
+      rejectUnauthorized: false,
+      headers: {
+        'User-Agent': 'AndorraLegalBrief/1.0 (+https://rssand-production.up.railway.app/)'
+      }
+    }, response => {
+      if (response.statusCode !== 200) {
+        response.resume();
+        reject(new Error(`HTTP error Govern: ${response.statusCode}`));
+        return;
+      }
+
+      response.setEncoding('utf8');
+      let html = '';
+      response.on('data', chunk => {
+        html += chunk;
+      });
+      response.on('end', () => resolve(html));
+    });
+
+    request.setTimeout(30000, () => {
+      request.destroy(new Error('Timeout carregant Govern'));
+    });
+    request.on('error', reject);
+  });
 }
 
 // Helper to check if a CG article is legislative or cultural/protocol
@@ -189,6 +179,8 @@ async function scrapeConsellGeneralNews() {
 
       const filterResult = getArticleCategory(title);
 
+      if (!title || !link || !date) return;
+
       items.push({
         source: "Consell General",
         sourceId: "consell_noticies",
@@ -197,7 +189,8 @@ async function scrapeConsellGeneralNews() {
         date,
         snippet: dateText,
         category: filterResult.category,
-        isLegislative: filterResult.isLegislative
+        isLegislative: filterResult.isLegislative,
+        legalRelevance: getLegalRelevance(title, filterResult.category)
       });
     });
 
@@ -208,51 +201,7 @@ async function scrapeConsellGeneralNews() {
   }
 }
 
-// 2. Consell General Iniciatives (Projectes i Proposicions de llei)
-async function scrapeConsellGeneralIniciatives() {
-  const urls = [
-    { url: 'https://www.consellgeneral.ad/ca/activitat-parlamentaria/iniciatives-legislatives/projectes-de-llei', category: 'Projecte de Llei' },
-    { url: 'https://www.consellgeneral.ad/ca/activitat-parlamentaria/iniciatives-legislatives/proposicions-de-llei', category: 'Proposició de Llei' }
-  ];
-  
-  const allItems = [];
-
-  for (const target of urls) {
-    try {
-      const response = await fetch(target.url);
-      if (!response.ok) throw new Error(`HTTP error CG Iniciatives: ${response.status}`);
-      const html = await response.text();
-      const $ = cheerio.load(html);
-
-      $('.tileItem').each((_, el) => {
-        const titleLink = $(el).find('h3.tileHeadline a.summary');
-        const title = titleLink.text().trim();
-        const relativeHref = titleLink.attr('href') || '';
-        const link = relativeHref.startsWith('http') ? relativeHref : `https://www.consellgeneral.ad${relativeHref}`;
-        
-        const descriptionText = $(el).find('p.tileBody span.description').text().trim();
-        const date = parseCatalanDate(descriptionText);
-
-        allItems.push({
-          source: `CG - ${target.category}s`,
-          sourceId: "consell_iniciatives",
-          title,
-          link,
-          date,
-          snippet: descriptionText,
-          category: target.category,
-          isLegislative: true
-        });
-      });
-    } catch (error) {
-      console.error(`Error scraping CG ${target.category}:`, error.message);
-    }
-  }
-
-  return allItems;
-}
-
-// 3. APDA RSS Parser
+// 2. APDA RSS Parser
 async function scrapeAPDAFeed() {
   try {
     const response = await fetch('https://www.apda.ad/feed');
@@ -281,6 +230,8 @@ async function scrapeAPDAFeed() {
         category = "Sancions / Resolucions";
       }
 
+      if (!title || !link || !date) return;
+
       items.push({
         source: "APDA (Dades & IA)",
         sourceId: "apda",
@@ -289,7 +240,8 @@ async function scrapeAPDAFeed() {
         date,
         snippet,
         category,
-        isLegislative: true
+        isLegislative: true,
+        legalRelevance: getLegalRelevance(title, category)
       });
     });
 
@@ -300,102 +252,47 @@ async function scrapeAPDAFeed() {
   }
 }
 
-// 4. Govern d'Andorra Scraper (via Yahoo Search API/WebScraping & Local Preseeded Fallback)
+// 4. Govern d'Andorra — direct official source
 async function scrapeGovernNews() {
-  const items = [];
   try {
-    // Attempt to search Yahoo for legislative news from Govern.ad
-    const searchUrl = 'https://search.yahoo.com/search?p=site%3Agovern.ad+%22decret%22+OR+%22llei%22+OR+%22reglament%22';
-    const response = await fetch(searchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
+    const html = await fetchGovernHtml();
+    const $ = cheerio.load(html);
+    const items = [];
+    const seen = new Set();
+
+    $('.card-new').each((_, el) => {
+      const body = $(el).find('.card-body');
+      const titleLink = body.find('.card-title a');
+      const title = titleLink.text().replace(/\s+/g, ' ').trim();
+      const href = titleLink.attr('href') || '';
+      const link = href.startsWith('http') ? href : `https://www.govern.ad${href}`;
+      const category = body.find('.tag').text().replace(/\s+/g, ' ').trim() || 'Govern';
+      const paragraphs = body.find('p.font-s');
+      const snippet = paragraphs.first().text().replace(/\s+/g, ' ').trim();
+      const dateText = paragraphs.last().text().replace(/\s+/g, ' ').trim();
+      const date = parseCatalanDate(dateText);
+      const legalRelevance = getLegalRelevance(title, category);
+
+      if (!title || !href || !date || seen.has(link) || legalRelevance === 'low') return;
+      seen.add(link);
+      items.push({
+        source: "Govern d'Andorra",
+        sourceId: "govern",
+        title,
+        link,
+        date,
+        snippet,
+        category,
+        isLegislative: true,
+        legalRelevance
+      });
     });
 
-    if (response.ok) {
-      const html = await response.text();
-      const $ = cheerio.load(html);
-      
-      const yahooItems = [];
-      $('.algo, .dd.algo, .compTitle, .lh-24').each((_, el) => {
-        const titleLink = $(el).find('a').first();
-        const rawHref = titleLink.attr('href');
-        const titleText = titleLink.text().trim();
-        
-        let link = rawHref;
-        if (rawHref && rawHref.includes('/RU=')) {
-          try {
-            link = decodeURIComponent(rawHref.split('/RU=')[1].split('/RK=')[0]);
-          } catch (e) {}
-        }
-
-        const snippetText = $(el).find('.compText, .p-abs, .compText p').text().trim();
-        
-        // Clean snippet from duplicate titles/paths
-        let snippet = snippetText;
-        if (snippet.includes(' › ')) {
-          snippet = snippet.substring(snippet.indexOf(' › ') + 15).trim();
-        }
-
-        // Avoid adding navigation links or non-news items
-        if (link && link.includes('govern.ad') && titleText && !titleText.includes('Yahoo') && !link.endsWith('/actualitat')) {
-          // Extract a date if possible from the snippet
-          let date = new Date().toISOString().split('T')[0];
-          const dateMatch = snippet.match(/(\w{3})\s+(\d{1,2}),\s+(\d{4})/); // e.g. "Jul 7, 2026" or "May 7, 2025"
-          if (dateMatch) {
-            try {
-              date = new Date(dateMatch[0]).toISOString().split('T')[0];
-            } catch (e) {}
-          } else {
-            // Find custom Catalan dates like "1-7-2026"
-            const catDateMatch = snippet.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-            if (catDateMatch) {
-              const d = catDateMatch[1].padStart(2, '0');
-              const m = catDateMatch[2].padStart(2, '0');
-              const y = catDateMatch[3];
-              date = `${y}-${m}-${d}`;
-            }
-          }
-
-          yahooItems.push({
-            source: "Govern d'Andorra",
-            sourceId: "govern",
-            title: titleText.replace(/ - Govern d’Andorra.*/, '').replace(/https:\/\/.*/, '').trim(),
-            link,
-            date,
-            snippet: snippet.length > 220 ? snippet.substring(0, 220) + '...' : snippet,
-            category: link.includes('/decrets') ? 'Decret' : 'Legislació',
-            isLegislative: true
-          });
-        }
-      });
-
-      // Filter out duplicate links
-      const seen = new Set();
-      const uniqueYahoo = [];
-      for (const item of yahooItems) {
-        if (!seen.has(item.link)) {
-          seen.add(item.link);
-          uniqueYahoo.push(item);
-        }
-      }
-
-      if (uniqueYahoo.length > 0) {
-        items.push(...uniqueYahoo);
-      }
-    }
+    return items;
   } catch (error) {
-    console.error("Error scraping Govern news via search:", error.message);
+    console.error("Error scraping Govern news:", error.message);
+    return [];
   }
-
-  // Always merge pre-seeded items to guarantee content if the scraper fails or is blocked
-  for (const preItem of PRESEEDED_NEWS.govern) {
-    if (!items.some(item => item.title === preItem.title)) {
-      items.push(preItem);
-    }
-  }
-
-  return items;
 }
 
 // 5. Andorra UE Scraper
@@ -418,6 +315,8 @@ async function scrapeAndorraUE() {
 
       const snippet = $(el).find('.post-classic-text').text().trim();
 
+      if (!title || !link || !date) return;
+
       items.push({
         source: "Andorra UE",
         sourceId: "andorra_ue",
@@ -426,7 +325,8 @@ async function scrapeAndorraUE() {
         date,
         snippet,
         category: "Acord d'Associació",
-        isLegislative: true
+        isLegislative: true,
+        legalRelevance: getLegalRelevance(title, "Acord d'Associació")
       });
     });
 
@@ -456,6 +356,8 @@ async function scrapeAFANews() {
         const date = parseCatalanDate(dateText);
 
         if (title) {
+          if (!date) return;
+
           items.push({
             source: "AFA (Financer)",
             sourceId: "afa",
@@ -464,7 +366,8 @@ async function scrapeAFANews() {
             date,
             snippet: snippet || "Comunicat oficial de premsa emès per l'Autoritat Financera Andorrana.",
             category: "Regulació Financera",
-            isLegislative: true
+            isLegislative: true,
+            legalRelevance: getLegalRelevance(title, "Regulació Financera")
           });
         }
       }
@@ -487,81 +390,65 @@ async function scrapeAFANews() {
   }
 }
 
-// 7. BOPA Manual Aggregator
+// 7. BOPA — official public API and direct official documents
 async function scrapeBOPANews() {
-  const items = [];
   try {
-    // Search Yahoo for recent BOPA Andorra notifications
-    const searchUrl = 'https://search.yahoo.com/search?p=%22BOPA+Andorra%22+lleis+decrets+reglaments+2026';
-    const response = await fetch(searchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
+    const bulletinResponse = await fetch(`${BOPA_API_BASE}/api/GetNewPaginatedNewsletter`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sizePage: 4,
+        datesList: [],
+        skipToken: null,
+        anys: [],
+        numButlleti: null
+      })
     });
+    if (!bulletinResponse.ok) throw new Error(`HTTP error BOPA bulletins: ${bulletinResponse.status}`);
+    const bulletinData = await bulletinResponse.json();
+    const bulletins = Array.isArray(bulletinData.bopaList) ? bulletinData.bopaList : [];
 
-    if (response.ok) {
-      const html = await response.text();
-      const $ = cheerio.load(html);
-      
-      const yahooItems = [];
-      $('.algo, .dd.algo, .compTitle, .lh-24').each((_, el) => {
-        const titleLink = $(el).find('a').first();
-        const rawHref = titleLink.attr('href');
-        const titleText = titleLink.text().trim();
-        
-        let link = rawHref;
-        if (rawHref && rawHref.includes('/RU=')) {
-          try {
-            link = decodeURIComponent(rawHref.split('/RU=')[1].split('/RK=')[0]);
-          } catch (e) {}
-        }
+    const documentsByBulletin = await Promise.all(bulletins.map(async bulletin => {
+      const date = new Date(bulletin.dataPublicacio);
+      const year = date.getUTCFullYear();
+      const url = `${BOPA_DOCUMENTS_ENDPOINT}&numBOPA=${encodeURIComponent(bulletin.numBOPA)}&year=${year}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP error BOPA ${bulletin.numBOPA}: ${response.status}`);
+      const data = await response.json();
+      return { bulletin, documents: data.paginatedDocuments || [] };
+    }));
 
-        const snippet = $(el).find('.compText, .p-abs, .compText p').text().trim();
+    const items = [];
+    for (const { bulletin, documents } of documentsByBulletin) {
+      const publicationDate = new Date(bulletin.dataPublicacio).toISOString().split('T')[0];
+      for (const result of documents) {
+        const document = result.document || {};
+        const title = decodeBopaText(document.sumari);
+        const category = document.organisme || 'Disposicions oficials';
+        const legalRelevance = getLegalRelevance(title, category);
+        if (!title || !document.metadata_storage_path || legalRelevance === 'low') continue;
 
-        if (link && link.includes('bopa.ad') && titleText && !titleText.includes('Yahoo')) {
-          let date = new Date().toISOString().split('T')[0];
-          const dateMatch = snippet.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-          if (dateMatch) {
-            const d = dateMatch[1].padStart(2, '0');
-            const m = dateMatch[2].padStart(2, '0');
-            const y = dateMatch[3];
-            date = `${y}-${m}-${d}`;
-          }
-
-          yahooItems.push({
-            source: "BOPA (Cerca)",
-            sourceId: "bopa",
-            title: titleText.replace(/ - BOPA.*/, '').trim(),
-            link,
-            date,
-            snippet: snippet.length > 200 ? snippet.substring(0, 200) + '...' : snippet,
-            category: "BOPA",
-            isLegislative: true,
-            manualReview: true
-          });
-        }
-      });
-
-      const seen = new Set();
-      for (const item of yahooItems) {
-        if (!seen.has(item.link)) {
-          seen.add(item.link);
-          items.push(item);
-        }
+        items.push({
+          source: `BOPA núm. ${bulletin.numBOPA}${bulletin.isExtra ? ' extraordinari' : ''}`,
+          sourceId: "bopa",
+          title,
+          link: document.metadata_storage_path,
+          date: publicationDate,
+          snippet: `${category}${document.tema ? ` · ${document.tema}` : ''}. Publicació oficial del ${publicationDate}.`,
+          category,
+          isLegislative: true,
+          legalRelevance,
+          officialDocument: true,
+          bulletinNumber: bulletin.numBOPA
+        });
       }
     }
+
+    return items.slice(0, 60);
   } catch (error) {
-    console.error("Error fetching BOPA search results:", error.message);
+    console.error("Error fetching BOPA official data:", error.message);
+    return [];
   }
-
-  // Merge pre-seeded items
-  for (const preItem of PRESEEDED_NEWS.bopa) {
-    if (!items.some(item => item.title === preItem.title)) {
-      items.push(preItem);
-    }
-  }
-
-  return items;
 }
 
 // Serve Frontend Static Files
@@ -572,7 +459,6 @@ async function fetchAllFeeds() {
   console.log("Fetching feeds...");
   const results = await Promise.allSettled([
     scrapeConsellGeneralNews(),
-    scrapeConsellGeneralIniciatives(),
     scrapeAPDAFeed(),
     scrapeGovernNews(),
     scrapeAndorraUE(),
@@ -589,12 +475,25 @@ async function fetchAllFeeds() {
     }
   });
 
-  // Sort chronologically: newest first
-  allItems.sort((a, b) => new Date(b.date) - new Date(a.date));
+  const seenLinks = new Set();
+  const normalizedItems = allItems.filter(item => {
+    if (!item || !item.title || !item.link || !item.date || seenLinks.has(item.link)) return false;
+    seenLinks.add(item.link);
+    item.legalRelevance = item.legalRelevance || getLegalRelevance(item.title, item.category);
+    return true;
+  });
 
-  newsCache = allItems;
+  // Sort chronologically: newest first
+  normalizedItems.sort((a, b) => {
+    const dateDifference = new Date(b.date) - new Date(a.date);
+    if (dateDifference !== 0) return dateDifference;
+    const rank = { high: 3, medium: 2, low: 1 };
+    return (rank[b.legalRelevance] || 0) - (rank[a.legalRelevance] || 0);
+  });
+
+  newsCache = normalizedItems;
   cacheTimestamp = Date.now();
-  return allItems;
+  return normalizedItems;
 }
 
 // API Endpoint to get unified news feed
@@ -643,7 +542,11 @@ async function getAiSummary(forceRefresh = false) {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const limitDateStr = sevenDaysAgo.toISOString().split('T')[0];
 
-  const weeklyNews = items.filter(item => item.date >= limitDateStr);
+  const weeklyNews = items.filter(item =>
+    item.date >= limitDateStr &&
+    item.legalRelevance !== 'low' &&
+    item.isLegislative !== false
+  );
 
   if (weeklyNews.length === 0) {
     aiSummaryCache = {
@@ -668,14 +571,15 @@ async function getAiSummary(forceRefresh = false) {
     `[${idx + 1}] Font: ${n.source} | Data: ${n.date} | Categoria: ${n.category || 'General'}\nTítol: ${n.title}\nDescripció: ${n.snippet || ''}\nEnllaç: ${n.link || ''}\n`
   ).join('\n---\n');
 
-  const prompt = `Ets un expert en actualitat política, legislativa i jurídica del Principat d'Andorra. 
-A partir de les següents notícies oficials de la darrera setmana, redacta un resum executiu professional, objectiu i de gran qualitat en català.
+  const prompt = `Ets l'editor jurídic d'un butlletí professional adreçat a advocats exercents del Principat d'Andorra.
+A partir exclusivament de les següents publicacions oficials de la darrera setmana, redacta una síntesi rigorosa, concisa i útil per a la pràctica jurídica, en català.
 
 Notícies de la setmana:
 ${newsSummaryText}
 
-Tingues en compte que el resum ha de reflectir exactament el contingut de les notícies de forma concisa i professional, evitant opinions personals.
-Per a la secció "noticiesAmbImpacte", selecciona les 5 o 6 notícies més importants d'entre les facilitades i, per a cadascuna d'elles, manté el títol clar, l'enllaç original de la llista (link) exactament igual, i afegeix-hi una explicació d'1 o 2 frases explicant l'impacte pràctic de la notícia per al lector (ciutadà o empresa).`;
+No inventis dates d'entrada en vigor, terminis, obligacions, efectes jurídics ni conclusions que no constin en el material facilitat. Si una dada no es pot determinar, no l'afirmis.
+Prioritza lleis, reglaments, decrets, resolucions, jurisprudència, iniciatives legislatives i canvis regulatoris amb impacte professional.
+Per a "noticiesAmbImpacte", selecciona fins a 6 publicacions i conserva exactament el títol i l'enllaç originals. Explica en 1 o 2 frases què convé revisar o per què pot ser rellevant per a un despatx, sense donar assessorament jurídic ni extrapolar més enllà de la font.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3.5-flash',
@@ -778,13 +682,31 @@ function parseDateToCatalan(dateStr) {
   return `${dayOfWeek}, ${day} ${prep} ${monthName} del ${year}`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function safeExternalUrl(value) {
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '#';
+  } catch (error) {
+    return '#';
+  }
+}
+
 // Generate HTML Newsletter Template with responsive and inline styles
 function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbImpacte, allNewsItems) {
   const dateFormatted = parseDateToCatalan(dateStr);
   
   const pointsHtml = puntsClau.map(pt => `
     <li style="margin-bottom: 8px; color: #334155; font-size: 15px; line-height: 1.5; font-family: 'Inter', sans-serif;">
-      ${pt}
+      ${escapeHtml(pt)}
     </li>
   `).join('');
 
@@ -792,6 +714,7 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
     const orig = allNewsItems.find(item => item.link === ai.link || item.title === ai.titol) || {};
     const sourceName = orig.source || "Actualitat";
     const category = orig.category || "General";
+    const articleLink = safeExternalUrl(ai.link);
     
     let badgeColor = "#64748b";
     if (sourceName.includes("Consell")) badgeColor = "#8b5cf6";
@@ -807,25 +730,25 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
           <tr>
             <td>
               <span class="badge" style="background-color: ${badgeColor}; color: #ffffff; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; font-family: 'Inter', sans-serif;">
-                ${sourceName}
+                ${escapeHtml(sourceName)}
               </span>
               <span class="category" style="color: #64748b; font-size: 12px; margin-left: 10px; font-family: 'Inter', sans-serif;">
-                • ${category}
+                • ${escapeHtml(category)}
               </span>
             </td>
           </tr>
         </table>
         <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 18px; font-family: 'Outfit', 'Inter', sans-serif; font-weight: 700; line-height: 1.3;">
-          <a href="${ai.link || '#'}" target="_blank" style="color: #0f172a; text-decoration: none;">
-            ${ai.titol}
+          <a href="${articleLink}" target="_blank" rel="noopener noreferrer" style="color: #0f172a; text-decoration: none;">
+            ${escapeHtml(ai.titol)}
           </a>
         </h3>
         <p style="color: #475569; font-size: 14px; line-height: 1.5; margin-bottom: 12px; font-family: 'Inter', sans-serif;">
-          ${orig.snippet || ""}
+          ${escapeHtml(orig.snippet || "")}
         </p>
         <div class="impact-section" style="background-color: #f8fafc; border-left: 3px solid #3b82f6; padding: 10px 15px; border-radius: 0 8px 8px 0; margin-top: 10px;">
           <p style="margin: 0; font-size: 13px; font-style: italic; color: #1e293b; font-family: 'Inter', sans-serif; font-weight: 500;">
-            <strong>Per què importa:</strong> ${ai.impacte}
+            <strong>Per què convé revisar-ho:</strong> ${escapeHtml(ai.impacte)}
           </p>
         </div>
       </div>
@@ -837,7 +760,7 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Butlletí Setmanal d'Andorra</title>
+  <title>Andorra Legal Brief · Butlletí setmanal</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
     body {
@@ -876,8 +799,8 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
                     </td>
                   </tr>
                 </table>
-                <h1 style="color: #ffffff; font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; margin: 15px 0 5px 0; letter-spacing: -0.02em;">BUTLLETÍ SETMANAL</h1>
-                <p style="color: #3b82f6; font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.1em;">Andorra Actualitat Legislativa</p>
+                <h1 style="color: #ffffff; font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; margin: 15px 0 5px 0; letter-spacing: -0.02em;">ANDORRA LEGAL BRIEF</h1>
+                <p style="color: #3b82f6; font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.1em;">Novetats per a la pràctica jurídica</p>
                 <p style="color: #94a3b8; font-size: 13px; margin: 0;">${dateFormatted}</p>
               </td>
             </tr>
@@ -886,7 +809,7 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
                 <div style="background-color: #f1f5f9; border-left: 4px solid #3b82f6; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
                   <h2 style="margin-top: 0; margin-bottom: 10px; font-family: 'Outfit', sans-serif; font-size: 18px; color: #0f172a; font-weight: 700;">Resum de la Setmana</h2>
                   <p style="margin: 0; color: #334155; font-size: 14px; line-height: 1.6; font-family: 'Inter', sans-serif;">
-                    ${editorialIntro}
+                    ${escapeHtml(editorialIntro)}
                   </p>
                 </div>
                 
@@ -895,7 +818,7 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
                   ${pointsHtml}
                 </ul>
                 
-                <h2 style="font-family: 'Outfit', sans-serif; font-size: 18px; color: #0f172a; font-weight: 700; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 20px;">Notícies de la Setmana</h2>
+                <h2 style="font-family: 'Outfit', sans-serif; font-size: 18px; color: #0f172a; font-weight: 700; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 20px;">Novetats jurídiques de la setmana</h2>
                 <div>
                   ${articlesHtml}
                 </div>
@@ -904,10 +827,10 @@ function generateNewsletterHtml(dateStr, editorialIntro, puntsClau, noticiesAmbI
             <tr>
               <td align="center" style="background-color: #f8fafc; padding: 30px 40px; border-top: 1px solid #e2e8f0; text-align: center;">
                 <p style="color: #64748b; font-size: 12px; margin: 0 0 10px 0; line-height: 1.5; font-family: 'Inter', sans-serif;">
-                  Aquest butlletí és una síntesi generada automàticament a partir dels canals oficials d'Andorra (Consell General, Govern d'Andorra, APDA, Andorra UE, AFA i BOPA).
+                  Síntesi elaborada a partir de fonts oficials d'Andorra. Contingut informatiu: cal consultar sempre el text oficial i no constitueix assessorament jurídic.
                 </p>
                 <p style="color: #94a3b8; font-size: 11px; margin: 0; font-family: 'Inter', sans-serif;">
-                  © 2026 Andorra RSS Reader. Tots els drets reservats.
+                  © 2026 Andorra Legal Brief.
                 </p>
                 <div style="margin-top: 15px;">
                   <a href="https://rssand-production.up.railway.app" style="color: #3b82f6; text-decoration: none; font-size: 12px; font-weight: 600; font-family: 'Outfit', sans-serif;">
@@ -930,10 +853,10 @@ function generateNewsletterText(dateStr, editorialIntro, puntsClau, noticiesAmbI
   const dateFormatted = parseDateToCatalan(dateStr);
   const pointsText = puntsClau.map(pt => `• ${pt}`).join('\n');
   const articlesText = noticiesAmbImpacte.map((ai, idx) => {
-    return `${idx + 1}. ${ai.titol}\n   Enllaç: ${ai.link}\n   Impacte: ${ai.impacte}\n`;
+    return `${idx + 1}. ${ai.titol}\n   Enllaç: ${ai.link}\n   Per què convé revisar-ho: ${ai.impacte}\n`;
   }).join('\n');
 
-  return `BUTLLETÍ SETMANAL - Andorra Actualitat Legislativa
+  return `ANDORRA LEGAL BRIEF - Novetats per a la pràctica jurídica
 Data: ${dateFormatted}
 ==================================================
 
@@ -945,16 +868,16 @@ FETS DESTACATS:
 ${pointsText}
 
 --------------------------------------------------
-NOTÍCIES DE LA SETMANA:
+NOVETATS JURÍDIQUES DE LA SETMANA:
 ${articlesText}
 
 ==================================================
-Aquest butlletí és una síntesi generada automàticament a partir dels canals oficials d'Andorra.
+Síntesi de fonts oficials. Cal consultar sempre el text oficial; no constitueix assessorament jurídic.
 Obrir l'aplicació web: https://rssand-production.up.railway.app
 `;
 }
 
-// API Endpoint to get AI-generated daily newsletter
+// API Endpoint to get the AI-generated weekly legal newsletter
 app.get('/api/news/newsletter', async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === 'true';
@@ -976,7 +899,11 @@ app.get('/api/news/newsletter', async (req, res) => {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const limitDateStr = sevenDaysAgo.toISOString().split('T')[0];
-    const weeklyNews = items.filter(item => item.date >= limitDateStr);
+    const weeklyNews = items.filter(item =>
+      item.date >= limitDateStr &&
+      item.legalRelevance !== 'low' &&
+      item.isLegislative !== false
+    );
 
     const newsletterData = {
       editorialIntro: summary.resumExecutiu,
@@ -1009,8 +936,8 @@ app.get('/api/news/newsletter', async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error generant el butlletí diari:", error);
-    let errorMsg = "S'ha produït un error al generar el butlletí diari amb Intel·ligència Artificial.";
+    console.error("Error generant el butlletí jurídic setmanal:", error);
+    let errorMsg = "S'ha produït un error al generar el butlletí jurídic setmanal amb Intel·ligència Artificial.";
     let status = 500;
     if (error.status === 429 || (error.message && (error.message.includes('Quota') || error.message.includes('quota') || error.message.includes('429') || error.message.includes('RESOURCE_EXHAUSTED')))) {
       status = 429;

@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let allNewsItems = [];
     let currentTab = 'all';
     let searchQuery = '';
-    let isCgFilterStrict = true;
+    let isLegalFilterStrict = true;
 
     // DOM ELEMENTS
     const feedSkeletons = document.getElementById('feed-skeletons');
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // BRAND BADGES CLASS RESOLVER
     const sourceClassMap = {
         'consell_noticies': 'badge-consell',
-        'consell_iniciatives': 'badge-iniciatives',
+        'tramitacio': 'badge-iniciatives',
         'apda': 'badge-apda',
         'govern': 'badge-govern',
         'andorra_ue': 'badge-ue',
@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const sourceIcons = {
         'consell_noticies': 'fa-landmark',
-        'consell_iniciatives': 'fa-file-signature',
+        'tramitacio': 'fa-file-signature',
         'apda': 'fa-shield-halved',
         'govern': 'fa-building-columns',
         'andorra_ue': 'fa-globe-europe',
@@ -79,6 +79,24 @@ document.addEventListener('DOMContentLoaded', () => {
             return `${parts[2]}/${parts[1]}/${parts[0]}`;
         }
         return dateStr;
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function safeExternalUrl(value) {
+        try {
+            const url = new URL(value);
+            return ['http:', 'https:'].includes(url.protocol) ? url.href : '#';
+        } catch (error) {
+            return '#';
+        }
     }
 
     // FETCH NEWS DATA FROM SERVER
@@ -170,18 +188,25 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Filter by tab
         let filtered = allNewsItems;
-        if (currentTab !== 'all') {
+        if (currentTab === 'tramitacio') {
+            const legislativeProcessKeywords = [
+                'projecte de llei', 'proposició de llei', 'proposta de reglament',
+                'tràmit parlamentari', 'tramitació', 'modificació del codi',
+                'aprova la modificació', 'aprovat el projecte', 'futura llei'
+            ];
+            filtered = filtered.filter(item => {
+                const text = `${item.title || ''} ${item.category || ''}`.toLowerCase();
+                return legislativeProcessKeywords.some(keyword => text.includes(keyword));
+            });
+        } else if (currentTab !== 'all') {
             filtered = filtered.filter(item => item.sourceId === currentTab);
         }
 
-        // Apply Consell General strict legislative filter if toggle is checked
-        if (isCgFilterStrict) {
+        // Default professional view: omit institutional or informative items
+        // without a concrete legal or regulatory signal.
+        if (isLegalFilterStrict) {
             filtered = filtered.filter(item => {
-                // If it is from CG news and is marked as not legislative (cultural/protocol), filter it out
-                if (item.sourceId === 'consell_noticies' && !item.isLegislative) {
-                    return false;
-                }
-                return true;
+                return item.isLegislative !== false && item.legalRelevance !== 'low';
             });
         }
 
@@ -232,14 +257,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const badgeClass = sourceClassMap[item.sourceId] || 'badge-govern';
         const sourceIcon = sourceIcons[item.sourceId] || 'fa-newspaper';
         const sourceName = item.source || 'Font oficial';
+        const safeLink = safeExternalUrl(item.link);
+        const relevanceLabel = item.legalRelevance === 'high' ? 'Impacte jurídic alt' : 'Seguiment';
+        const relevanceClass = item.legalRelevance === 'high' ? 'relevance-high' : 'relevance-medium';
 
         const displayDate = formatDateDisplay(item.date);
 
         let bopaIndicatorHtml = '';
-        if (item.manualReview) {
+        if (item.officialDocument) {
             bopaIndicatorHtml = `
-                <div class="bopa-manual-indicator">
-                    <i class="fa-solid fa-triangle-exclamation"></i> Revisió manual pendent
+                <div class="official-document-indicator">
+                    <i class="fa-solid fa-circle-check"></i> Document oficial
                 </div>
             `;
         }
@@ -248,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div>
                 <div class="card-header-meta">
                     <span class="source-badge ${badgeClass}">
-                        <i class="fa-solid ${sourceIcon}"></i> ${sourceName}
+                        <i class="fa-solid ${sourceIcon}"></i> ${escapeHtml(sourceName)}
                     </span>
                     <span class="news-date">
                         <i class="fa-regular fa-calendar"></i> ${displayDate}
@@ -256,25 +284,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 
                 <h3 class="news-title">
-                    <a href="${item.link}" target="_blank" title="Obrir enllaç oficial">${item.title}</a>
+                    <a href="${safeLink}" target="_blank" rel="noopener noreferrer" title="Obrir la font oficial">${escapeHtml(item.title)}</a>
                 </h3>
                 
                 ${bopaIndicatorHtml}
                 
-                <p class="news-snippet">${item.snippet || "Sense descripció disponible. Premeu 'Obrir' per anar al contingut oficial."}</p>
+                <p class="news-snippet">${escapeHtml(item.snippet || "Sense descripció disponible. Obriu la font oficial per consultar el contingut complet.")}</p>
             </div>
             
             <div class="card-footer">
-                <span class="category-tag">
-                    <i class="fa-solid fa-tags"></i> ${item.category || "General"}
-                </span>
+                <div class="card-tags">
+                    <span class="category-tag">
+                        <i class="fa-solid fa-tags"></i> ${escapeHtml(item.category || "General")}
+                    </span>
+                    <span class="relevance-tag ${relevanceClass}">${relevanceLabel}</span>
+                </div>
                 
                 <div class="card-actions">
                     <button class="btn-action-text btn-expand" title="Ampliar descripció">
                         <i class="fa-solid fa-circle-chevron-down"></i> Ampliar
                     </button>
-                    <a href="${item.link}" target="_blank" class="btn-action-link" title="Anar al lloc web oficial">
-                        Obrir <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    <a href="${safeLink}" target="_blank" rel="noopener noreferrer" class="btn-action-link" title="Consultar la font oficial">
+                        Font oficial <i class="fa-solid fa-arrow-up-right-from-square"></i>
                     </a>
                 </div>
             </div>
@@ -307,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchInput.value = '';
         searchQuery = '';
         searchClearBtn.style.display = 'none';
-        isCgFilterStrict = true;
+        isLegalFilterStrict = true;
         cgFilterToggle.checked = true;
         currentTab = 'all';
         tabs.forEach(t => {
@@ -341,7 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // CG filter toggle slider
     cgFilterToggle.addEventListener('change', (e) => {
-        isCgFilterStrict = e.target.checked;
+        isLegalFilterStrict = e.target.checked;
         applyFiltersAndRender();
     });
 
