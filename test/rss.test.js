@@ -5,7 +5,8 @@ const {
   getProfessionalReview,
   extractBopaDocumentSignals,
   normalizeSubscriptionRequest,
-  generateNewsletterText
+  generateNewsletterText,
+  parseRssDate
 } = require('../server');
 
 const items = [
@@ -119,6 +120,20 @@ test('els senyals BOPA només capturen terminis amb actuació concreta', () => {
   assert.match(signals.operativeDeadlines[0], /presentar la sol·licitud/i);
   assert.match(signals.operativeDeadlines[1], /al·legacions/i);
   assert.doesNotMatch(signals.operativeDeadlines.join(' '), /projecte es va debatre/i);
+});
+
+test('el parser RSS accepta pubDate i dc:date', () => {
+  const pubDateItem = require('cheerio').load(
+    '<item><pubDate>Sat, 08 Aug 2026 17:02:15 +0000</pubDate></item>',
+    { xmlMode: true }
+  )('item').first();
+  const dcDateItem = require('cheerio').load(
+    '<item><dc:date xmlns:dc="http://purl.org/dc/elements/1.1/">2026-08-07T14:09:53+00:00</dc:date></item>',
+    { xmlMode: true }
+  )('item').first();
+
+  assert.equal(parseRssDate(pubDateItem), '2026-08-08');
+  assert.equal(parseRssDate(dcDateItem), '2026-08-07');
 });
 
 test('la subscripció valida consentiment, correu i preferències', () => {

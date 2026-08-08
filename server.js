@@ -19,6 +19,13 @@ let newsCache = null;
 let cacheTimestamp = null;
 let sourceHealthCache = [];
 const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+const PRESS_SOURCE_IDS = new Set([
+  'bondia',
+  'elperiodic',
+  'andorraara',
+  'altaveu',
+  'digitalandorra'
+]);
 
 // Cache summaries independently for each practice-area edition.
 const aiSummaryCache = new Map();
@@ -909,6 +916,14 @@ async function scrapeBOPANews() {
 }
 
 // 8. Generic RSS Parser for Press Sources
+function parseRssDate(item) {
+  const dateValue = ['pubDate', 'dc\\:date', 'date', 'published', 'updated']
+    .map(selector => item.find(selector).first().text().trim())
+    .find(Boolean);
+
+  return parseCatalanDate(dateValue);
+}
+
 async function scrapeGenericRSS(url, sourceName, sourceId) {
   try {
     const response = await fetch(url, {
@@ -924,8 +939,7 @@ async function scrapeGenericRSS(url, sourceName, sourceId) {
     $('item').each((_, el) => {
       const title = $(el).find('title').text().trim();
       const link = $(el).find('link').text().trim();
-      const pubDate = $(el).find('pubDate').text().trim();
-      const date = parseCatalanDate(pubDate);
+      const date = parseRssDate($(el));
       
       let snippet = "";
       const description = $(el).find('description').text().trim();
@@ -1031,7 +1045,9 @@ async function fetchAllFeeds() {
     seenLinks.add(item.link);
     
     const relevance = getLegalRelevance(item.title, item.category);
-    if (relevance === 'low') return false;
+    // The legal filter applies to official sources. Press feeds are shown in
+    // full under the Premsa tab, including general-interest articles.
+    if (relevance === 'low' && !PRESS_SOURCE_IDS.has(item.sourceId)) return false;
 
     item.legalRelevance = item.legalRelevance || relevance;
     item.documentType = item.documentType || getDocumentType(item.title, item.category);
@@ -1047,6 +1063,16 @@ async function fetchAllFeeds() {
     const rank = { high: 3, medium: 2, low: 1 };
     return (rank[b.legalRelevance] || 0) - (rank[a.legalRelevance] || 0);
   });
+
+  const visibleItemsBySource = normalizedItems.reduce((counts, item) => {
+    counts.set(item.sourceId, (counts.get(item.sourceId) || 0) + 1);
+    return counts;
+  }, new Map());
+  sourceHealthCache = sourceHealthCache.map(source => ({
+    ...source,
+    rawItemsCount: source.itemsCount,
+    itemsCount: visibleItemsBySource.get(source.id) || 0
+  }));
 
   newsCache = normalizedItems;
   cacheTimestamp = Date.now();
@@ -1784,5 +1810,6 @@ module.exports = {
   extractBopaDocumentSignals,
   normalizeSubscriptionRequest,
   getEmailSubscriptionConfig,
-  generateNewsletterText
+  generateNewsletterText,
+  parseRssDate
 };
