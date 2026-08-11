@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const PRACTICE_AREA_PREFERENCE_KEY = 'andorraLegalBriefPracticeArea';
+    const LEGAL_RELEVANCE_PREFERENCE_KEY = 'andorraLegalBriefLegalRelevance';
     const KNOWN_ITEMS_KEY = 'andorraLegalBriefKnownItems';
     const SAVED_ITEMS_KEY = 'andorraLegalBriefSavedItems';
     const stateTools = window.LegalBriefState;
@@ -17,12 +18,27 @@ document.addEventListener('DOMContentLoaded', () => {
             // The application remains usable when browser storage is unavailable.
         }
     }
+    function readLegalRelevancePreference() {
+        try {
+            return localStorage.getItem(LEGAL_RELEVANCE_PREFERENCE_KEY) || 'all';
+        } catch (error) {
+            return 'all';
+        }
+    }
+    function saveLegalRelevancePreference(value) {
+        try {
+            localStorage.setItem(LEGAL_RELEVANCE_PREFERENCE_KEY, value);
+        } catch (error) {
+            // The application remains usable when browser storage is unavailable.
+        }
+    }
 
     // STATE MANAGERS
     let allNewsItems = [];
     let currentTab = 'all';
     let searchQuery = '';
     let currentPracticeArea = readPracticeAreaPreference();
+    let currentRelevance = readLegalRelevancePreference();
     let newItemLinks = new Set();
     let savedItems = [];
     let visitTrackingInitialized = false;
@@ -34,7 +50,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const searchInput = document.getElementById('search-input');
     const searchClearBtn = document.getElementById('search-clear-btn');
-    const practiceAreaSelect = document.getElementById('practice-area-select');
+    const legalRelevanceSelect = document.getElementById('legal-relevance-select');
+    const validRelevanceValues = new Set(['all', 'legal', 'high', 'low']);
+    if (!validRelevanceValues.has(currentRelevance)) currentRelevance = 'all';
+    legalRelevanceSelect.value = currentRelevance;
     const bopaAlert = document.getElementById('bopa-alert');
     const cacheStatus = document.getElementById('cache-status');
     const sourceStatusBtn = document.getElementById('btn-source-status');
@@ -230,21 +249,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function populatePracticeAreas() {
-        const previousValue = currentPracticeArea;
         const areas = [...new Set(allNewsItems
             .map(item => item.practiceArea)
             .filter(Boolean))]
             .sort((a, b) => a.localeCompare(b, 'ca'));
-
-        practiceAreaSelect.innerHTML = '<option value="all">Totes les àrees de pràctica</option>';
-        areas.forEach(area => {
-            const option = document.createElement('option');
-            option.value = area;
-            option.textContent = area;
-            practiceAreaSelect.appendChild(option);
-        });
-        practiceAreaSelect.value = areas.includes(previousValue) ? previousValue : 'all';
-        currentPracticeArea = practiceAreaSelect.value;
 
         const subscribePreviousValue = subscribeArea.value;
         subscribeArea.innerHTML = '<option value="">Totes les àrees</option>';
@@ -430,12 +438,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
 
-        if (currentPracticeArea !== 'all' && currentTab !== 'saved') {
-            filtered = filtered.filter(item => item.practiceArea === currentPracticeArea);
-        }
-
-        if (currentPracticeArea !== 'all' && currentTab !== 'saved') {
-            filtered = filtered.filter(item => item.practiceArea === currentPracticeArea);
+        if (currentRelevance !== 'all' && currentTab !== 'saved') {
+            filtered = filtered.filter(item => currentRelevance === 'legal'
+                ? ['high', 'medium'].includes(item.legalRelevance)
+                : item.legalRelevance === currentRelevance
+            );
         }
 
         // Filter by Search Query
@@ -496,8 +503,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const sourceIcon = sourceIcons[item.sourceId] || 'fa-newspaper';
         const sourceName = item.source || 'Font oficial';
         const safeLink = safeExternalUrl(item.link);
-        const relevanceLabel = item.legalRelevance === 'high' ? 'Impacte jurídic alt' : 'Seguiment';
-        const relevanceClass = item.legalRelevance === 'high' ? 'relevance-high' : 'relevance-medium';
+        const relevanceLabels = {
+            high: 'Prioritari',
+            medium: 'Rellevant',
+            low: 'Informació general'
+        };
+        const relevanceLabel = relevanceLabels[item.legalRelevance] || relevanceLabels.low;
+        const relevanceClass = item.legalRelevance === 'high'
+            ? 'relevance-high'
+            : item.legalRelevance === 'medium' ? 'relevance-medium' : 'relevance-low';
         const isNew = newItemLinks.has(item.link);
         const isSaved = savedItems.some(saved => saved.link === item.link);
         const newIndicatorHtml = isNew
@@ -688,8 +702,8 @@ document.addEventListener('DOMContentLoaded', () => {
         searchInput.value = '';
         searchQuery = '';
         searchClearBtn.style.display = 'none';
-        currentPracticeArea = 'all';
-        practiceAreaSelect.value = 'all';
+        currentRelevance = 'all';
+        legalRelevanceSelect.value = 'all';
         currentTab = 'all';
         tabs.forEach(t => {
             if (t.getAttribute('data-tab') === 'all') {
@@ -720,11 +734,9 @@ document.addEventListener('DOMContentLoaded', () => {
         applyFiltersAndRender();
     });
 
-    practiceAreaSelect.addEventListener('change', (e) => {
-        currentPracticeArea = e.target.value;
-        savePracticeAreaPreference(currentPracticeArea);
-        newsletterAreaSelect.value = currentPracticeArea;
-        subscribeArea.value = currentPracticeArea === 'all' ? '' : currentPracticeArea;
+    legalRelevanceSelect.addEventListener('change', (e) => {
+        currentRelevance = e.target.value;
+        saveLegalRelevancePreference(currentRelevance);
         newsletterHtml = '';
         newsletterText = '';
         aiSummaryContent.classList.add('hide');
@@ -968,7 +980,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     newsletterAreaSelect.addEventListener('change', () => {
         currentPracticeArea = newsletterAreaSelect.value;
-        practiceAreaSelect.value = currentPracticeArea;
         subscribeArea.value = currentPracticeArea === 'all' ? '' : currentPracticeArea;
         savePracticeAreaPreference(currentPracticeArea);
         newsletterHtml = '';

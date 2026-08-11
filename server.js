@@ -1049,7 +1049,9 @@ async function fetchAllFeeds() {
     // full under the Premsa tab, including general-interest articles.
     if (relevance === 'low' && !PRESS_SOURCE_IDS.has(item.sourceId)) return false;
 
-    item.legalRelevance = item.legalRelevance || relevance;
+    item.legalRelevance = ['high', 'medium', 'low'].includes(item.legalRelevance)
+      ? item.legalRelevance
+      : relevance;
     item.documentType = item.documentType || getDocumentType(item.title, item.category);
     item.practiceArea = item.practiceArea || getPracticeArea(item);
     Object.assign(item, getProfessionalReview(item));
@@ -1209,17 +1211,17 @@ app.get('/feed.xml', async (req, res) => {
   }
 });
 
-// Helper function to audit the summary with Mistral (Second Brain Auditor)
-async function auditSummaryWithMistral(newsForPrompt, draftSummary) {
-  const apiKey = (process.env.MISTRAL_API_KEY || '').trim();
-  const model = (process.env.MISTRAL_MODEL || 'open-mistral-nemo').trim();
+// Helper function to audit the summary with OpenAI (Second Brain Auditor)
+async function auditSummaryWithOpenAI(newsForPrompt, draftSummary) {
+  const apiKey = (process.env.OPENAI_API_KEY || '').trim();
+  const model = (process.env.OPENAI_MODEL || 'gpt-5.6-luna').trim();
 
   if (!apiKey) {
-    console.log("Mistral API key not configured, skipping audit step.");
+    console.log("OpenAI API key not configured, skipping audit step.");
     return draftSummary;
   }
 
-  console.log("Auditing draft summary with Mistral API using model:", model);
+  console.log("Auditing draft summary with OpenAI API using model:", model);
 
   const newsSummaryText = newsForPrompt.map((n, idx) => 
     `[${idx + 1}] Font: ${n.source} | Data: ${n.date} | Tipus: ${n.documentType} | Àrea: ${n.practiceArea}\nTítol: ${n.title}\nDescripció: ${n.snippet || ''}\nEntrada en vigor explícita: ${n.entryIntoForce || 'No identificada al document'}\nPossibles terminis literals: ${n.operativeDeadlines?.join(' | ') || 'No identificats al document'}\nEnllaç: ${n.link || ''}\n`
@@ -1253,7 +1255,7 @@ REGLAMENT D'AUDITORIA:
   const userMessage = `Esborrany de resum a auditar:\n${JSON.stringify(draftSummary, null, 2)}`;
 
   try {
-    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1271,20 +1273,20 @@ REGLAMENT D'AUDITORIA:
     });
 
     if (!response.ok) {
-      throw new Error(`Mistral API returned status ${response.status}`);
+      throw new Error(`OpenAI API returned status ${response.status}`);
     }
 
     const data = await response.json();
     const auditedJsonText = data.choices?.[0]?.message?.content;
     if (!auditedJsonText) {
-      throw new Error('Mistral response content is empty');
+      throw new Error('OpenAI response content is empty');
     }
 
     const auditedSummary = JSON.parse(auditedJsonText);
-    console.log("Mistral auditing completed successfully.");
+    console.log("OpenAI auditing completed successfully.");
     return auditedSummary;
   } catch (error) {
-    console.error("Error during Mistral auditing, falling back to original draft:", error.message);
+    console.error("Error during OpenAI auditing, falling back to original draft:", error.message);
     return draftSummary;
   }
 }
@@ -1426,9 +1428,9 @@ Per a "noticiesAmbImpacte", selecciona fins a 6 publicacions i conserva exactame
     const summaryJson = JSON.parse(response.text);
     let auditedJson = summaryJson;
     try {
-      auditedJson = await auditSummaryWithMistral(newsForPrompt, summaryJson);
+      auditedJson = await auditSummaryWithOpenAI(newsForPrompt, summaryJson);
     } catch (auditErr) {
-      console.error("Mistral auditing failed, using Gemini's draft summary:", auditErr.message);
+      console.error("OpenAI auditing failed, using Gemini's draft summary:", auditErr.message);
     }
     const summary = normalizeAiSummary(auditedJson, newsForPrompt, fallbackSummary);
     aiSummaryCache.set(requestedArea, { timestamp: Date.now(), data: summary });
