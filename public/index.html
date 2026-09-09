@@ -1,1 +1,393 @@
-@public/index.html
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Actualitat Jurídica Andorrana · Síntesi intel·ligent</title>
+    <link rel="alternate" type="application/rss+xml" title="Actualitat Jurídica Andorrana RSS" href="/feed.xml">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom Style Sheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glass-bg-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <div class="logo-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+                <div>
+                    <h1>Actualitat Jurídica <span>Andorrana</span></h1>
+                    <p class="subtitle">Síntesi intel·ligent de la normativa d'Andorra i l'activitat jurídica oficial</p>
+                </div>
+            </div>
+            
+            <div class="header-controls">
+                <span id="cache-status" class="cache-badge"><i class="fa-solid fa-spinner fa-spin"></i> Carregant...</span>
+                <button id="btn-subscribe" class="rss-subscribe-btn" type="button" aria-expanded="false" aria-controls="subscribe-panel">
+                    <i class="fa-solid fa-paper-plane"></i> Rep el brief
+                </button>
+                <button id="btn-source-status" class="source-status-btn" type="button" aria-expanded="false" aria-controls="source-status-panel">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i> Fonts
+                </button>
+                <button id="btn-refresh" class="btn-refresh" title="Actualitzar dades ara">
+                    <i class="fa-solid fa-rotate"></i> Actualitzar
+                </button>
+                <button id="btn-theme-toggle" class="btn-theme-toggle" title="Mode clar/fosc">
+                    <i class="fa-solid fa-sun"></i>
+                </button>
+            </div>
+        </header>
+
+        <section id="subscribe-panel" class="subscribe-panel glass-card hide" aria-live="polite">
+            <div class="subscribe-copy">
+                <span class="eyebrow"><i class="fa-solid fa-paper-plane"></i> Subscripció personalitzada</span>
+                <h2>Rep només les novetats que t’interessen</h2>
+                <p>Tria l’àrea jurídica i rep una selecció útil per al despatx. Pots utilitzar el correu, quan estigui activat, o un canal RSS sense facilitar dades personals.</p>
+            </div>
+            <div class="subscribe-builder">
+                <label for="subscribe-area">
+                    Àrea de pràctica
+                    <select id="subscribe-area">
+                        <option value="">Totes les àrees</option>
+                    </select>
+                </label>
+                <label class="subscribe-checkbox" for="subscribe-high-only">
+                    <input id="subscribe-high-only" type="checkbox">
+                    <span>Només impacte jurídic alt</span>
+                </label>
+                <form id="email-subscribe-form" class="email-subscribe-form hide" novalidate>
+                    <label for="subscribe-email">
+                        Correu professional
+                        <input id="subscribe-email" name="email" type="email" autocomplete="email" placeholder="nom@despatx.ad" maxlength="254" required>
+                    </label>
+                    <input id="subscribe-website" name="website" class="subscription-honeypot" type="text" tabindex="-1" autocomplete="off" aria-hidden="true">
+                    <label class="subscribe-checkbox" for="subscribe-consent">
+                        <input id="subscribe-consent" type="checkbox" required>
+                        <span>Accepto la <a id="subscribe-privacy-link" href="#" target="_blank" rel="noopener noreferrer">política de privacitat</a> i l’enviament d’un correu de confirmació.</span>
+                    </label>
+                    <button id="btn-email-subscribe" type="submit"><i class="fa-regular fa-envelope"></i> Subscriu-m’hi per correu</button>
+                </form>
+                <p id="email-subscribe-unavailable" class="email-subscribe-unavailable">La subscripció per correu s’activarà quan el servei de doble confirmació estigui configurat. Mentrestant, utilitza el canal RSS.</p>
+                <div class="subscribe-divider"><span>Canal RSS</span></div>
+                <div class="subscribe-url-row">
+                    <input id="subscribe-feed-url" type="text" readonly aria-label="URL del canal RSS personalitzat">
+                    <button id="btn-copy-feed" type="button"><i class="fa-regular fa-copy"></i> Copia</button>
+                    <a id="btn-open-feed" href="/feed.xml" target="_blank" rel="noopener noreferrer">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Obre
+                    </a>
+                </div>
+                <p id="subscribe-feedback" class="subscribe-feedback" role="status"></p>
+            </div>
+        </section>
+
+        <section id="source-status-panel" class="source-status-panel glass-card hide" aria-live="polite">
+            <div class="source-status-heading">
+                <div>
+                    <h2>Traçabilitat de les fonts</h2>
+                    <p>Estat de la darrera consulta als canals oficials.</p>
+                </div>
+                <span id="source-status-summary"></span>
+            </div>
+            <div id="source-status-grid" class="source-status-grid"></div>
+        </section>
+
+        <!-- Control Panel (Search & Filters) -->
+        <section class="control-panel">
+            <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="search-input" placeholder="Cerca notícies per paraula clau o concepte...">
+                <button id="search-clear-btn" class="search-clear"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <label class="practice-filter" for="legal-relevance-select">
+                <i class="fa-solid fa-scale-balanced"></i>
+                <select id="legal-relevance-select" aria-label="Filtra per rellevància jurídica">
+                    <option value="all">Tot</option>
+                    <option value="legal">Rellevant jurídicament</option>
+                    <option value="high">Prioritari per revisar</option>
+                    <option value="low">Informació general</option>
+                </select>
+            </label>
+        </section>
+
+        <!-- Navigation Tabs -->
+        <nav class="navigation-tabs">
+            <div class="tabs-scroll-container">
+                <button class="tab-btn active" data-tab="all">
+                    <i class="fa-solid fa-layer-group"></i> Tot
+                </button>
+                <button class="tab-btn" data-tab="new">
+                    <i class="fa-solid fa-bell"></i> Noves <span id="new-items-count" class="tab-count hide">0</span>
+                </button>
+                <button class="tab-btn" data-tab="saved">
+                    <i class="fa-solid fa-bookmark"></i> Pendents <span id="saved-items-count" class="tab-count hide">0</span>
+                </button>
+                <button class="tab-btn" data-tab="media">
+                    <i class="fa-solid fa-newspaper"></i> Mitjans
+                </button>
+                <button class="tab-btn" data-tab="consell_noticies">
+                    <i class="fa-solid fa-landmark"></i> Consell General
+                </button>
+                <button class="tab-btn" data-tab="tramitacio">
+                    <i class="fa-solid fa-file-signature"></i> Tramitació legislativa
+                </button>
+                <button class="tab-btn" data-tab="apda">
+                    <i class="fa-solid fa-shield-halved"></i> APDA
+                </button>
+                <button class="tab-btn" data-tab="govern">
+                    <i class="fa-solid fa-building-columns"></i> Govern
+                </button>
+                <button class="tab-btn" data-tab="andorra_ue">
+                    <i class="fa-solid fa-globe-europe"></i> Andorra - UE
+                </button>
+                <button class="tab-btn" data-tab="afa">
+                    <i class="fa-solid fa-coins"></i> AFA
+                </button>
+                <button class="tab-btn" data-tab="newsletter">
+                    <i class="fa-solid fa-envelope-open-text"></i> Butlletí Setmanal
+                </button>
+            </div>
+        </nav>
+
+        <!-- News Grid -->
+        <main class="news-feed">
+            <!-- Automatic Daily Summary -->
+            <section id="daily-summary-container" class="glass-card daily-summary-card" aria-live="polite">
+                <div class="ai-summary-header">
+                    <div class="ai-title-area">
+                        <div class="daily-summary-icon"><i class="fa-solid fa-sun"></i></div>
+                        <div>
+                            <h2>Resum diari</h2>
+                            <p class="ai-subtitle">Elaborat cada dia a les 08:00 amb les publicacions del dia anterior</p>
+                        </div>
+                    </div>
+                    <span id="daily-summary-status" class="daily-summary-status">Comprovant l’últim resum...</span>
+                </div>
+
+                <div id="daily-summary-loading" class="ai-loading-state">
+                    <div class="ai-loading-spinner">
+                        <div class="spinner-ring"></div>
+                        <i class="fa-solid fa-sun spinner-icon"></i>
+                    </div>
+                    <p>Carregant el resum diari...</p>
+                </div>
+
+                <div id="daily-summary-empty" class="daily-summary-empty hide"></div>
+
+                <div id="daily-summary-content" class="ai-content-area hide">
+                    <div class="ai-summary-block">
+                        <h3><i class="fa-solid fa-align-left"></i> Resum executiu</h3>
+                        <p id="daily-summary-executive"></p>
+                    </div>
+                    <div class="ai-details-grid">
+                        <div class="ai-summary-block">
+                            <h3><i class="fa-solid fa-list-check"></i> Punts clau</h3>
+                            <ul id="daily-summary-points" class="ai-bullets"></ul>
+                        </div>
+                        <div class="ai-summary-block">
+                            <h3><i class="fa-solid fa-arrow-up-right-from-square"></i> Publicacions a revisar</h3>
+                            <div id="daily-summary-links" class="daily-summary-links"></div>
+                        </div>
+                    </div>
+                    <div class="ai-summary-footer">
+                        <span id="daily-summary-method"><i class="fa-solid fa-shield-halved"></i> Síntesi de fonts oficials</span>
+                        <span id="daily-summary-date"></span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- AI Summary Section -->
+            <section id="ai-summary-container" class="glass-card ai-summary-card">
+                <div class="ai-summary-header">
+                    <div class="ai-title-area">
+                        <div class="ai-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+                        <div>
+                            <h2>Brief jurídic setmanal</h2>
+                            <p class="ai-subtitle">Síntesi professional de fonts oficials, orientada a la pràctica jurídica andorrana</p>
+                        </div>
+                    </div>
+                    <button id="btn-ai-summary" class="btn-ai-summary">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generar brief
+                    </button>
+                </div>
+                
+                <!-- Loading State -->
+                <div id="ai-loading" class="ai-loading-state hide">
+                    <div class="ai-loading-spinner">
+                        <div class="spinner-ring"></div>
+                        <i class="fa-solid fa-wand-magic-sparkles spinner-icon"></i>
+                    </div>
+                    <p>Preparant el brief a partir de les publicacions oficials de la setmana...</p>
+                </div>
+
+                <!-- Error State -->
+                <div id="ai-error" class="ai-error-state hide">
+                    <div class="ai-error-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+                    <p id="ai-error-text"></p>
+                </div>
+
+                <!-- Content State -->
+                <div id="ai-summary-content" class="ai-content-area hide">
+                    <div class="ai-summary-block">
+                        <h3><i class="fa-solid fa-align-left"></i> Resum Executiu</h3>
+                        <p id="ai-exec-summary"></p>
+                    </div>
+                    
+                    <div class="ai-details-grid">
+                        <div class="ai-summary-block">
+                            <h3><i class="fa-solid fa-list-check"></i> Punts Clau</h3>
+                            <ul id="ai-key-points" class="ai-bullets"></ul>
+                        </div>
+                        
+                        <div class="ai-summary-block">
+                            <h3><i class="fa-solid fa-tags"></i> Sectors Destacats</h3>
+                            <div id="ai-sectors" class="ai-sectors-list"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="ai-summary-footer">
+                        <span id="ai-summary-method"><i class="fa-solid fa-scale-balanced"></i> Síntesi de fonts oficials</span>
+                        <span id="ai-summary-date"></span>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Newsletter Generator Section -->
+            <section id="newsletter-section" class="glass-card newsletter-card hide">
+                <div class="newsletter-header">
+                    <div class="newsletter-title-area">
+                        <div class="newsletter-icon"><i class="fa-solid fa-envelope-open-text"></i></div>
+                        <div>
+                            <h2>Butlletí Jurídic Setmanal</h2>
+                            <p class="newsletter-subtitle">Correu maquetat amb les novetats oficials que poden requerir revisió del despatx</p>
+                        </div>
+                    </div>
+                    <div class="newsletter-controls">
+                        <label for="newsletter-area-select">
+                            Edició per àrea
+                            <select id="newsletter-area-select" aria-label="Selecciona l’àrea de pràctica del butlletí">
+                                <option value="all">Totes les àrees de pràctica</option>
+                            </select>
+                        </label>
+                        <button id="btn-generate-newsletter" class="btn-refresh">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Generar Butlletí
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="newsletter-loading" class="ai-loading-state hide">
+                    <div class="ai-loading-spinner">
+                        <div class="spinner-ring"></div>
+                        <i class="fa-solid fa-envelope-open-text spinner-icon"></i>
+                    </div>
+                    <p>L'assistent està recopilant les notícies de les darreres jornades i redactant el butlletí...</p>
+                </div>
+
+                <!-- Error State -->
+                <div id="newsletter-error" class="ai-error-state hide">
+                    <div class="ai-error-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+                    <p id="newsletter-error-text"></p>
+                </div>
+
+                <!-- Content Panel -->
+                <div id="newsletter-content" class="newsletter-content-area hide">
+                    <div class="newsletter-actions-bar">
+                        <button id="btn-copy-html" class="btn-action-text btn-copy-action">
+                            <i class="fa-regular fa-copy"></i> Copia codi HTML
+                        </button>
+                        <button id="btn-copy-text" class="btn-action-text btn-copy-action">
+                            <i class="fa-solid fa-file-lines"></i> Copia text pla
+                        </button>
+                        <button id="btn-download-html" class="btn-action-text btn-download-action">
+                            <i class="fa-solid fa-download"></i> Descarrega fitxer
+                        </button>
+                    </div>
+
+                    <!-- Custom notification bubble for copy actions -->
+                    <div id="copy-toast" class="copy-toast hide">
+                        <i class="fa-solid fa-circle-check"></i> Codi copiat al porta-retalls!
+                    </div>
+
+                    <div class="newsletter-preview-container">
+                        <iframe id="newsletter-iframe-preview" title="Newsletter Preview"></iframe>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Skeleton Loaders -->
+            <div id="feed-skeletons" class="news-grid">
+                <div class="skeleton-card glass-card">
+                    <div class="skeleton-shimmer"></div>
+                    <div class="skeleton-header">
+                        <div class="skeleton-badge"></div>
+                        <div class="skeleton-date"></div>
+                    </div>
+                    <div class="skeleton-title"></div>
+                    <div class="skeleton-title short"></div>
+                    <div class="skeleton-text"></div>
+                    <div class="skeleton-text"></div>
+                    <div class="skeleton-footer"></div>
+                </div>
+                <div class="skeleton-card glass-card">
+                    <div class="skeleton-shimmer"></div>
+                    <div class="skeleton-header">
+                        <div class="skeleton-badge"></div>
+                        <div class="skeleton-date"></div>
+                    </div>
+                    <div class="skeleton-title"></div>
+                    <div class="skeleton-title short"></div>
+                    <div class="skeleton-text"></div>
+                    <div class="skeleton-text"></div>
+                    <div class="skeleton-footer"></div>
+                </div>
+                <div class="skeleton-card glass-card">
+                    <div class="skeleton-shimmer"></div>
+                    <div class="skeleton-header">
+                        <div class="skeleton-badge"></div>
+                        <div class="skeleton-date"></div>
+                    </div>
+                    <div class="skeleton-title"></div>
+                    <div class="skeleton-title short"></div>
+                    <div class="skeleton-text"></div>
+                    <div class="skeleton-text"></div>
+                    <div class="skeleton-footer"></div>
+                </div>
+            </div>
+
+            <!-- Actual Feed Content -->
+            <div id="feed-grid" class="news-grid hide"></div>
+            
+            <!-- Empty State -->
+            <div id="feed-empty" class="empty-state glass-card hide">
+                <div class="empty-icon"><i class="fa-solid fa-folder-open"></i></div>
+                <h2>No s'han trobat notícies</h2>
+                <p>No hi ha elements que coincideixin amb els filtres actius o la cerca especificada.</p>
+                <button id="btn-reset-filters" class="btn-reset-filters">Netejar cerca i filtres</button>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>&copy; 2026 Actualitat Jurídica Andorrana · Fonts oficials · Síntesi intel·ligent, no assessorament jurídic.</p>
+            <p class="technical-info">Dades obtingudes dels portals oficials i mitjans de comunicació d'Andorra.</p>
+        </footer>
+    </div>
+    <script src="state.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
