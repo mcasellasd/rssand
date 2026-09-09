@@ -6,7 +6,9 @@ const {
   extractBopaDocumentSignals,
   normalizeSubscriptionRequest,
   generateNewsletterText,
-  parseRssDate
+  parseRssDate,
+  parseCatalanDate,
+  parseJusticiaNewsHtml
 } = require('../server');
 
 const items = [
@@ -134,6 +136,34 @@ test('el parser RSS accepta pubDate i dc:date', () => {
 
   assert.equal(parseRssDate(pubDateItem), '2026-08-08');
   assert.equal(parseRssDate(dcDateItem), '2026-08-07');
+});
+
+test('la font justicia.ad extreu notícies del llistat WordPress', () => {
+  assert.equal(parseCatalanDate('set. 9, 2026'), '2026-09-09');
+
+  const parsed = parseJusticiaNewsHtml(`
+    <main id="main-content"><div id="left-area">
+      <article class="et_pb_post post-123">
+        <a class="entry-featured-image-url" href="https://www.justicia.ad/noticia-prova/"><img alt="Prova"></a>
+        <h2 class="entry-title"><a href="/noticia-prova/">Nova composició judicial</a></h2>
+        <p class="post-meta">by <span class="published">set. 9, 2026</span> | <a>Notícies</a></p>
+        Actualització oficial del Consell Superior de la Justícia.
+      </article>
+    </div></main>
+  `);
+
+  assert.deepEqual(parsed, [{
+    source: 'Consell Superior de la Justícia',
+    sourceId: 'justicia_ad',
+    title: 'Nova composició judicial',
+    link: 'https://www.justicia.ad/noticia-prova/',
+    date: '2026-09-09',
+    snippet: 'Actualització oficial del Consell Superior de la Justícia.',
+    category: 'Justícia institucional',
+    isLegislative: true,
+    officialDocument: true,
+    legalRelevance: 'medium'
+  }]);
 });
 
 test('la subscripció valida consentiment, correu i preferències', () => {

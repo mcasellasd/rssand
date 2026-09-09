@@ -13,6 +13,8 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '16kb' }));
 const PORT = process.env.PORT || 3000;
+const JUSTICIA_BASE_URL = 'https://www.justicia.ad';
+const JUSTICIA_NEWS_URL = `${JUSTICIA_BASE_URL}/category/noticies/`;
 
 // In-memory cache for news feed data
 let newsCache = null;
@@ -127,6 +129,22 @@ function parseCatalanDate(dateStr) {
     const month = matchSlash[2].padStart(2, '0');
     const year = matchSlash[3];
     return `${year}-${month}-${day}`;
+  }
+
+  // WordPress archive format used by justicia.ad: "set. 9, 2026".
+  const abbreviatedMonths = {
+    'gen': 0, 'gener': 0, 'feb': 1, 'febr': 1, 'febrer': 1,
+    'mar': 2, 'març': 2, 'abr': 3, 'abril': 3, 'mai': 4, 'maig': 4,
+    'jun': 5, 'juny': 5, 'jul': 6, 'juliol': 6, 'ag': 7, 'ago': 7,
+    'agost': 7, 'set': 8, 'setembre': 8, 'oct': 9, 'octubre': 9,
+    'nov': 10, 'novembre': 10, 'des': 11, 'desembre': 11
+  };
+  const abbreviatedMatch = dateStr.toLowerCase().replace(/,/g, ' ').match(/\b([a-zç]+)\.?\s+(\d{1,2})\s+(\d{4})\b/);
+  if (abbreviatedMatch) {
+    const monthIndex = abbreviatedMonths[abbreviatedMatch[1]];
+    if (monthIndex !== undefined) {
+      return `${abbreviatedMatch[3]}-${String(monthIndex + 1).padStart(2, '0')}-${abbreviatedMatch[2].padStart(2, '0')}`;
+    }
   }
 
   // Format: "Yaounde (Camerun), 12 de juliol del 2026" or "30 d'abril del 2026" or "11 de juny a les 2026"
@@ -269,7 +287,8 @@ function getLegalRelevance(title = '', category = '') {
   const officialCategories = [
     'Govern', 'Disposicions oficials', 'Actualitat oficial', 'Acord d\'Associació',
     'Legislatiu / Normatiu', 'Activitat Parlamentària', 'Protecció de Dades',
-    'IA / Tecnologia', 'Sancions / Resolucions', 'Regulació Financera'
+    'IA / Tecnologia', 'Sancions / Resolucions', 'Regulació Financera',
+    'Justícia institucional'
   ];
   if (officialCategories.includes(category) || category.startsWith('Comú de') || category.startsWith('BOPA')) return 'medium';
 
@@ -611,6 +630,63 @@ function getArticleCategory(titleText) {
 }
 
 // SCRAPERS
+
+function parseJusticiaNewsHtml(html) {
+  const $ = cheerio.load(html);
+  const items = [];
+  const seenLinks = new Set();
+
+  $('#left-area article.et_pb_post, article.et_pb_post').each((_, element) => {
+    const article = $(element);
+    const titleLink = article.find('.entry-title a').first();
+    const title = titleLink.text().replace(/\s+/g, ' ').trim();
+    const href = titleLink.attr('href') || '';
+    const link = href ? new URL(href, JUSTICIA_BASE_URL).href : '';
+    const dateText = article.find('.published').first().text().replace(/\s+/g, ' ').trim();
+    const date = parseCatalanDate(dateText);
+    const snippet = article
+      .clone()
+      .find('.entry-title, .post-meta, .entry-featured-image-url, script, style')
+      .remove()
+      .end()
+      .text()
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!title || !link || !date || seenLinks.has(link)) return;
+    seenLinks.add(link);
+    items.push({
+      source: 'Consell Superior de la Justícia',
+      sourceId: 'justicia_ad',
+      title,
+      link,
+      date,
+      snippet,
+      category: 'Justícia institucional',
+      isLegislative: true,
+      officialDocument: true,
+      legalRelevance: getLegalRelevance(title, 'Justícia institucional')
+    });
+  });
+
+  return items;
+}
+
+async function scrapeJusticiaNews() {
+  try {
+    const response = await fetch(JUSTICIA_NEWS_URL, {
+      headers: {
+        'User-Agent': 'AndorraLegalBrief/1.0 (+https://rssand-production.up.railway.app/)',
+        'Accept-Language': 'ca,en;q=0.8'
+      }
+    });
+    if (!response.ok) throw new Error(`HTTP error justicia.ad: ${response.status}`);
+    return parseJusticiaNewsHtml(await response.text());
+  } catch (error) {
+    console.error('Error scraping justicia.ad:', error.message);
+    return [];
+  }
+}
 
 // 1. Consell General News
 async function scrapeConsellGeneralNews() {
@@ -989,6 +1065,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 async function fetchAllFeeds() {
   console.log("Fetching feeds...");
   const sources = [
+    { id: 'justicia_ad', name: 'Consell Superior de la Justícia', url: JUSTICIA_NEWS_URL, load: scrapeJusticiaNews },
     { id: 'consell_noticies', name: 'Consell General', url: 'https://www.consellgeneral.ad/ca/noticies', load: scrapeConsellGeneralNews },
     { id: 'apda', name: 'APDA', url: 'https://www.apda.ad', load: scrapeAPDAFeed },
     { id: 'govern', name: "Govern d'Andorra", url: 'https://www.govern.ad/ca/actualitat', load: scrapeGovernNews },
@@ -1813,5 +1890,7 @@ module.exports = {
   normalizeSubscriptionRequest,
   getEmailSubscriptionConfig,
   generateNewsletterText,
-  parseRssDate
+  parseRssDate,
+  parseCatalanDate,
+  parseJusticiaNewsHtml
 };
