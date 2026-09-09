@@ -673,15 +673,50 @@ function parseJusticiaNewsHtml(html) {
 }
 
 async function scrapeJusticiaNews() {
-  try {
-    const response = await fetch(JUSTICIA_NEWS_URL, {
+  const fetchWithNodeHttps = () => new Promise((resolve, reject) => {
+    const request = https.get(JUSTICIA_NEWS_URL, {
+      // justicia.ad currently serves an incomplete certificate chain. Keep
+      // this exception scoped to the official source and only as a fallback
+      // when the standard fetch cannot validate it.
+      agent: new https.Agent({ rejectUnauthorized: false }),
       headers: {
         'User-Agent': 'AndorraLegalBrief/1.0 (+https://rssand-production.up.railway.app/)',
         'Accept-Language': 'ca,en;q=0.8'
       }
+    }, response => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { body += chunk; });
+      response.on('end', () => {
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          reject(new Error(`HTTP redirect justicia.ad: ${response.statusCode}`));
+          return;
+        }
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          reject(new Error(`HTTP error justicia.ad: ${response.statusCode}`));
+          return;
+        }
+        resolve(body);
+      });
     });
-    if (!response.ok) throw new Error(`HTTP error justicia.ad: ${response.status}`);
-    return parseJusticiaNewsHtml(await response.text());
+    request.setTimeout(30000, () => request.destroy(new Error('Timeout scraping justicia.ad')));
+    request.on('error', reject);
+  });
+
+  try {
+    try {
+      const response = await fetch(JUSTICIA_NEWS_URL, {
+        headers: {
+          'User-Agent': 'AndorraLegalBrief/1.0 (+https://rssand-production.up.railway.app/)',
+          'Accept-Language': 'ca,en;q=0.8'
+        }
+      });
+      if (!response.ok) throw new Error(`HTTP error justicia.ad: ${response.status}`);
+      return parseJusticiaNewsHtml(await response.text());
+    } catch (fetchError) {
+      console.warn('Standard fetch failed for justicia.ad; retrying with targeted HTTPS fallback:', fetchError.message);
+      return parseJusticiaNewsHtml(await fetchWithNodeHttps());
+    }
   } catch (error) {
     console.error('Error scraping justicia.ad:', error.message);
     return [];
