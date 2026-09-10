@@ -103,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dailySummaryExecutive = document.getElementById('daily-summary-executive');
     const dailySummaryPoints = document.getElementById('daily-summary-points');
     const dailySummaryLinks = document.getElementById('daily-summary-links');
+    const dailySummarySourcesSummary = document.getElementById('daily-summary-sources-summary');
     const dailySummaryMethod = document.getElementById('daily-summary-method');
     const dailySummaryDate = document.getElementById('daily-summary-date');
 
@@ -768,11 +769,14 @@ document.addEventListener('DOMContentLoaded', () => {
             link.href = safeExternalUrl(item.link);
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
-            link.innerHTML = `${escapeHtml(item.titol)} <i class="fa-solid fa-arrow-up-right-from-square"></i>`;
+            link.setAttribute('aria-label', `Obrir la font original: ${item.titol}`);
+            link.innerHTML = '<i class="fa-solid fa-arrow-up-right-from-square"></i> Obre la font oficial';
             dailySummaryLinks.appendChild(link);
         });
+        dailySummarySourcesSummary.textContent = `${(summary.noticiesAmbImpacte || []).length} fonts originals consultables`;
         if (!dailySummaryLinks.children.length) {
             dailySummaryLinks.innerHTML = '<span class="daily-summary-no-links">No hi ha publicacions a revisar.</span>';
+            dailySummarySourcesSummary.textContent = 'No hi ha fonts originals destacades';
         }
 
         dailySummaryMethod.innerHTML = summary.editorialMode === 'ai'
