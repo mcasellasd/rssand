@@ -1125,13 +1125,24 @@ function parseANCNewsHtml(html) {
   const items = [];
   const seen = new Set();
 
-  $('article, .post, .blog-post, .post-classic, .news-item').each((_, el) => {
-    const titleLink = $(el).find('h1 a, h2 a, h3 a, h4 a, .entry-title a, .post-title a').first();
+  const candidates = $('article, .post, .blog-post, .post-classic, .news-item').toArray();
+  if (!candidates.length) {
+    $('h2 a, h3 a, h4 a, .entry-title a, .post-title a').each((_, linkEl) => {
+      candidates.push($(linkEl).parent().parent().get(0) || $(linkEl).parent().get(0));
+    });
+  }
+
+  $(candidates).each((_, el) => {
+    const titleLink = $(el).is('a')
+      ? $(el)
+      : $(el).find('h1 a, h2 a, h3 a, h4 a, .entry-title a, .post-title a').first();
     const title = titleLink.text().replace(/\s+/g, ' ').trim();
     const href = titleLink.attr('href') || '';
     const link = href.startsWith('http') ? href : `https://www.anc.ad${href}`;
-    const dateText = $(el).find('time, .date, .post-date, .entry-date, .post-classic-time').first().text().replace(/\s+/g, ' ').trim();
-    const date = parseCatalanDate(dateText) || parseCatalanDate($(el).find('time').attr('datetime') || '');
+    const dateElement = $(el).find('time, .date, .post-date, .entry-date, .post-classic-time').first();
+    const containerText = $(el).text().replace(/\s+/g, ' ').trim();
+    const dateText = dateElement.text().trim() || containerText.match(/\d{1,2} de [a-zà-ÿ]+ de \d{4}/i)?.[0] || '';
+    const date = parseCatalanDate(dateText) || parseCatalanDate(dateElement.attr('datetime') || '');
     const snippet = $(el).find('.entry-content, .excerpt, .summary, .post-excerpt, p').first().text().replace(/\s+/g, ' ').trim();
 
     if (!title || !href || !date || seen.has(link)) return;

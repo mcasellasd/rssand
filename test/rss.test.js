@@ -189,6 +189,15 @@ test('la font ANC-AD extreu notícies de ciberseguretat', () => {
     isLegislative: true,
     legalRelevance: 'high'
   }]);
+
+  const currentLayout = parseANCNewsHtml(`
+    <div class="entry">
+      <h4><a href="/noticia-avui/">Notícia d’avui de l’ANC-AD</a></h4>
+      <div>21 de setembre de 2026</div>
+    </div>
+  `);
+  assert.equal(currentLayout[0].title, 'Notícia d’avui de l’ANC-AD');
+  assert.equal(currentLayout[0].date, '2026-09-21');
 });
 test('la subscripció valida consentiment, correu i preferències', () => {
   assert.deepEqual(normalizeSubscriptionRequest({
