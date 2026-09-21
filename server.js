@@ -1119,6 +1119,52 @@ async function scrapeAFANews() {
   }
 }
 
+// ANC-AD — actualitat de ciberseguretat (pàgina HTML, sense RSS públic)
+function parseANCNewsHtml(html) {
+  const $ = cheerio.load(html);
+  const items = [];
+  const seen = new Set();
+
+  $('article, .post, .blog-post, .post-classic, .news-item').each((_, el) => {
+    const titleLink = $(el).find('h1 a, h2 a, h3 a, h4 a, .entry-title a, .post-title a').first();
+    const title = titleLink.text().replace(/\s+/g, ' ').trim();
+    const href = titleLink.attr('href') || '';
+    const link = href.startsWith('http') ? href : `https://www.anc.ad${href}`;
+    const dateText = $(el).find('time, .date, .post-date, .entry-date, .post-classic-time').first().text().replace(/\s+/g, ' ').trim();
+    const date = parseCatalanDate(dateText) || parseCatalanDate($(el).find('time').attr('datetime') || '');
+    const snippet = $(el).find('.entry-content, .excerpt, .summary, .post-excerpt, p').first().text().replace(/\s+/g, ' ').trim();
+
+    if (!title || !href || !date || seen.has(link)) return;
+    seen.add(link);
+    items.push({
+      source: 'ANC-AD',
+      sourceId: 'anc_ad',
+      title,
+      link,
+      date,
+      snippet,
+      category: 'Ciberseguretat i tecnologia',
+      isLegislative: true,
+      legalRelevance: getLegalRelevance(title, 'Ciberseguretat i tecnologia')
+    });
+  });
+
+  return items;
+}
+
+async function scrapeANCNews() {
+  try {
+    const response = await fetch('https://www.anc.ad/actualitat/', {
+      headers: { 'User-Agent': 'AndorraLegalBrief/1.0 (+https://rssand-production.up.railway.app/)' }
+    });
+    if (!response.ok) throw new Error(`HTTP error ANC-AD: ${response.status}`);
+    return parseANCNewsHtml(await response.text());
+  } catch (error) {
+    console.error('Error scraping ANC-AD:', error.message);
+    return [];
+  }
+}
+
 // 7. Generic RSS Parser for Press Sources
 function parseRssDate(item) {
   const dateValue = ['pubDate', 'dc\\:date', 'date', 'published', 'updated']
@@ -1199,6 +1245,7 @@ async function fetchAllFeeds() {
     { id: 'govern', name: "Govern d'Andorra", url: 'https://www.govern.ad/ca/actualitat', load: scrapeGovernNews },
     { id: 'andorra_ue', name: 'Andorra–UE', url: 'https://www.andorraue.ad/ca/actualitat/', load: scrapeAndorraUE },
     { id: 'afa', name: 'AFA', url: 'https://www.afa.ad', load: scrapeAFANews },
+    { id: 'anc_ad', name: 'ANC-AD', url: 'https://www.anc.ad/actualitat/', load: scrapeANCNews },
     { id: 'bondia', name: 'Bondia', url: 'https://www.bondia.ad/rss.xml', load: () => scrapeGenericRSS('https://www.bondia.ad/rss.xml', 'Bondia', 'bondia') },
     { id: 'elperiodic', name: 'El Periòdic', url: 'https://elperiodic.ad/feed/', load: () => scrapeGenericRSS('https://elperiodic.ad/feed/', 'El Periòdic', 'elperiodic') },
     { id: 'andorraara', name: 'Andorra Ara', url: 'https://andorraara.com/ca/feed', load: () => scrapeGenericRSS('https://andorraara.com/ca/feed', 'Andorra Ara', 'andorraara') },
@@ -2205,6 +2252,7 @@ module.exports = {
   parseRssDate,
   parseCatalanDate,
   parseJusticiaNewsHtml,
+  parseANCNewsHtml,
   getZonedDateParts,
   getLocalDateKey,
   shiftDateKey,

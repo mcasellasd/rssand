@@ -13,7 +13,7 @@ const itemA = {
   title: 'Llei A',
   date: '2026-07-16',
   practiceArea: 'Penal i seguretat',
-  legalStage: 'Publicat al BOPA',
+  legalStage: 'Publicat oficialment',
   professionalAction: 'Revisar l’entrada en vigor.',
   affectedProfiles: 'Despatxos penalistes',
   operativeDeadlines: ['Cal presentar el recurs dins dels 10 dies següents.']
@@ -37,7 +37,7 @@ test('la llista de pendents desa i elimina una publicació', () => {
   const saved = toggleSavedItem([], itemA);
   assert.equal(saved.length, 1);
   assert.equal(saved[0].link, itemA.link);
-  assert.equal(saved[0].legalStage, 'Publicat al BOPA');
+  assert.equal(saved[0].legalStage, 'Publicat oficialment');
   assert.equal(saved[0].professionalAction, 'Revisar l’entrada en vigor.');
   assert.deepEqual(saved[0].operativeDeadlines, itemA.operativeDeadlines);
   assert.deepEqual(toggleSavedItem(saved, itemA), []);

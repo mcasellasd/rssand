@@ -3,12 +3,13 @@ const assert = require('node:assert/strict');
 const {
   buildLegalRss,
   getProfessionalReview,
-  extractBopaDocumentSignals,
+  extractDocumentSignals,
   normalizeSubscriptionRequest,
   generateNewsletterText,
   parseRssDate,
   parseCatalanDate,
-  parseJusticiaNewsHtml
+  parseJusticiaNewsHtml,
+  parseANCNewsHtml
 } = require('../server');
 
 const items = [
@@ -19,7 +20,7 @@ const items = [
     category: 'Lleis',
     documentType: 'Llei',
     practiceArea: 'Protecció de dades i digital',
-    source: 'BOPA',
+    source: 'Govern',
     snippet: 'Text oficial',
     affectedProfiles: 'Responsables del tractament',
     professionalAction: 'Revisar obligacions i terminis.',
@@ -34,7 +35,7 @@ const items = [
     category: 'Resolucions',
     documentType: 'Resolució',
     practiceArea: 'Laboral i immigració',
-    source: 'BOPA',
+    source: 'Govern',
     snippet: 'Text oficial',
     isLegislative: true,
     legalRelevance: 'medium'
@@ -104,13 +105,13 @@ test('la pauta professional diferencia una iniciativa d’una norma publicada', 
 
   assert.equal(project.legalStage, 'En tramitació');
   assert.match(project.professionalAction, /no tractar el projecte com a dret vigent/i);
-  assert.equal(law.legalStage, 'Publicat al BOPA');
+  assert.equal(law.legalStage, 'Publicat oficialment');
   assert.match(law.professionalAction, /entrada en vigor/i);
   assert.match(law.affectedProfiles, /assessoria fiscal/i);
 });
 
-test('els senyals BOPA només capturen terminis amb actuació concreta', () => {
-  const signals = extractBopaDocumentSignals(`
+test('els senyals del document només capturen terminis amb actuació concreta', () => {
+  const signals = extractDocumentSignals(`
     <p>Aquesta Llei entrarà en vigor l’endemà de ser publicada.</p>
     <p>Les persones interessades han de presentar la sol·licitud dins dels 15 dies hàbils següents a la notificació.</p>
     <p>El projecte es va debatre durant un termini de 30 dies.</p>
@@ -166,6 +167,29 @@ test('la font justicia.ad extreu notícies del llistat WordPress', () => {
   }]);
 });
 
+test('la font ANC-AD extreu notícies de ciberseguretat', () => {
+  const parsed = parseANCNewsHtml(`
+    <main>
+      <article class="post">
+        <h2 class="entry-title"><a href="/actualitat/prova-anc/">Alerta de ciberseguretat</a></h2>
+        <time datetime="2026-09-04T16:03:46+02:00">4 de setembre de 2026</time>
+        <p>Recomanacions oficials per protegir els sistemes.</p>
+      </article>
+    </main>
+  `);
+
+  assert.deepEqual(parsed, [{
+    source: 'ANC-AD',
+    sourceId: 'anc_ad',
+    title: 'Alerta de ciberseguretat',
+    link: 'https://www.anc.ad/actualitat/prova-anc/',
+    date: '2026-09-04',
+    snippet: 'Recomanacions oficials per protegir els sistemes.',
+    category: 'Ciberseguretat i tecnologia',
+    isLegislative: true,
+    legalRelevance: 'high'
+  }]);
+});
 test('la subscripció valida consentiment, correu i preferències', () => {
   assert.deepEqual(normalizeSubscriptionRequest({
     email: ' Advocada@Despatx.ad ',
@@ -199,12 +223,12 @@ test('la newsletter en text pla conserva fase, afectats i pauta de revisió', ()
       link: items[0].link,
       impacte: items[0].professionalAction
     }],
-    [{ ...items[0], legalStage: 'Publicat al BOPA' }],
+    [{ ...items[0], legalStage: 'Publicat oficialment' }],
     'deterministic',
     items[0].practiceArea
   );
 
-  assert.match(text, /Fase: Publicat al BOPA/);
+  assert.match(text, /Fase: Publicat oficialment/);
   assert.match(text, /Pot interessar a: Responsables del tractament/);
   assert.match(text, /Possible termini \(comprovar al text oficial\): Cal presentar la comunicació dins dels 15 dies/);
   assert.match(text, /Per què convé revisar-ho: Revisar obligacions i terminis/);
