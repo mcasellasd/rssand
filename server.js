@@ -425,7 +425,7 @@ function getLegalRelevance(title = '', category = '') {
     'procediment', 'jurisdicció', 'tribunal', 'adjudicació', 'contracte públic',
     'notaria', 'registre civil', 'procurador', 'advocat', 'fiscalia',
     'anunci', 'avís', 'avís de licitació', 'oferta de treball', 'funció pública',
-    'convocatòria', 'examen'
+    'convocatòria', 'examen', 'ciberseguretat', 'seguretat de la informació'
   ];
 
   if (mediumKeywords.some(keyword => text.includes(keyword))) return 'medium';
@@ -1335,7 +1335,7 @@ async function fetchAllFeeds() {
   sourceHealthCache = sourceHealthCache.map(source => ({
     ...source,
     rawItemsCount: source.itemsCount,
-    itemsCount: visibleItemsBySource.get(source.id) || 0
+    visibleItemsCount: visibleItemsBySource.get(source.id) || 0
   }));
 
   newsCache = normalizedItems;
