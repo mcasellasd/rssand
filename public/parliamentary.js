@@ -11,6 +11,11 @@
   const clearButton = document.getElementById('initiative-clear');
   const refreshButton = document.getElementById('initiative-refresh');
   const themeButton = document.getElementById('btn-theme-toggle');
+  const summaryDialog = document.getElementById('initiative-summary-dialog');
+  const summaryTitle = document.getElementById('summary-dialog-title');
+  const summarySubtitle = summaryDialog.querySelector('.summary-dialog-subtitle');
+  const summaryContent = summaryDialog.querySelector('.summary-dialog-content');
+  const summarySources = summaryDialog.querySelector('.summary-dialog-sources');
   let initiatives = [];
 
   function applyTheme(isLight) {
@@ -81,9 +86,62 @@
         '<div class="initiative-card-top"><span class="initiative-kind">' + escapeHtml(item.type) + '</span><time class="initiative-date">' + escapeHtml(displayDate(item.date)) + '</time></div>' +
         '<h3>' + escapeHtml(item.title) + '</h3><span class="initiative-stage ' + stageClass(item.stage) + '">' + escapeHtml(item.stage) + '</span>' +
         '<p class="initiative-action">' + escapeHtml(item.latestAction) + '</p>' +
-        '<div class="initiative-card-bottom"><a href="' + safeUrl(item.url) + '" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-arrow-up-right-from-square"></i> Fitxa oficial</a>' + docsHtml + '</div></article>';
+        '<div class="initiative-card-bottom"><a href="' + safeUrl(item.url) + '" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-arrow-up-right-from-square"></i> Fitxa oficial</a><button class="initiative-summary-button" type="button" data-initiative-id="' + escapeHtml(item.id) + '"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Resum ampliat amb IA</button>' + docsHtml + '</div></article>';
     }).join('');
   }
+  async function showSummary(button) {
+    const item = initiatives.find(initiative => String(initiative.id) === button.dataset.initiativeId);
+    if (!item) return;
+    summaryTitle.textContent = 'Resum ampliat';
+    summarySubtitle.textContent = item.title;
+    summaryContent.textContent = 'Llegint la fitxa i els documents oficials per preparar el resum…';
+    summaryContent.classList.add('is-loading');
+    summaryContent.classList.remove('summary-error');
+    summarySources.replaceChildren();
+    summaryDialog.showModal();
+    button.disabled = true;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Preparant…';
+    try {
+      const response = await fetch('/api/parliamentary-tracking/' + encodeURIComponent(item.id) + '/summary', { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No s’ha pogut generar el resum.');
+      summaryContent.textContent = data.summary;
+      summaryContent.classList.remove('is-loading');
+      if (Array.isArray(data.sources) && data.sources.length) {
+        const heading = document.createElement('h3');
+        heading.textContent = 'Fonts oficials';
+        const links = document.createElement('ul');
+        data.sources.forEach(source => {
+          const url = safeUrl(source.url);
+          if (url === '#') return;
+          const link = document.createElement('a');
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = source.title;
+          const entry = document.createElement('li');
+          entry.append(link);
+          links.append(entry);
+        });
+        summarySources.append(heading, links);
+      }
+    } catch (error) {
+      summaryContent.textContent = error.message;
+      summaryContent.classList.remove('is-loading');
+      summaryContent.classList.add('summary-error');
+    } finally {
+      button.disabled = false;
+      button.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Resum ampliat amb IA';
+    }
+  }
+  list.addEventListener('click', event => {
+    const button = event.target.closest('.initiative-summary-button');
+    if (button) showSummary(button);
+  });
+  summaryDialog.querySelector('.summary-close').addEventListener('click', () => summaryDialog.close());
+  summaryDialog.addEventListener('click', event => {
+    if (event.target === summaryDialog) summaryDialog.close();
+  });
   async function load(refresh) {
     refreshButton.disabled = true;
     refreshButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Consultant…';
