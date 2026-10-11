@@ -230,6 +230,81 @@ function fetchHtml(url) {
   });
 }
 
+function fetchOfficialPdf(url, redirects = 0) {
+  let target;
+  try { target = new URL(url); } catch (_) {
+    return Promise.reject(new Error('L’enllaç del document oficial no és vàlid.'));
+  }
+  if (target.hostname !== 'seu.consellgeneral.ad' || target.protocol !== 'https:' || (!redirects && !target.pathname.startsWith('/documentPublic/download/'))) {
+    return Promise.reject(new Error('S’ha bloquejat una URL externa a la Seu Electrònica.'));
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timeout;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const request = https.get(target, {
+      agent: officialAgent,
+      headers: { 'User-Agent': 'ActualitatJuridicaAndorrana/1.0 (documents oficials)' }
+    }, response => {
+      const status = response.statusCode || 0;
+      if ([301, 302, 303, 307, 308].includes(status)) {
+        const location = response.headers.location;
+        response.resume();
+        if (!location || redirects >= 3) {
+          finish(new Error('La descàrrega del document oficial ha retornat una redirecció no vàlida.'));
+          return;
+        }
+        let next;
+        try { next = new URL(location, target); } catch (_) {
+          finish(new Error('La Seu ha retornat una redirecció no vàlida.'));
+          return;
+        }
+        if (next.protocol !== 'https:' || next.hostname !== 'seu.consellgeneral.ad') {
+          finish(new Error('S’ha bloquejat una redirecció fora de la Seu Electrònica.'));
+          return;
+        }
+        fetchOfficialPdf(next.href, redirects + 1).then(value => finish(null, value), finish);
+        return;
+      }
+      if (status < 200 || status >= 300) {
+        response.resume();
+        finish(new Error(`La Seu Electrònica ha retornat HTTP ${status} en descarregar un document.`));
+        return;
+      }
+      const chunks = [];
+      let bytes = 0;
+      response.on('data', chunk => {
+        if (settled) return;
+        bytes += chunk.length;
+        if (bytes > 20 * 1024 * 1024) {
+          finish(new Error('El document supera els 20 MB admesos.'));
+          response.destroy();
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.on('end', () => {
+        const pdf = Buffer.concat(chunks);
+        if (pdf.indexOf(Buffer.from('%PDF-'), 0, 'ascii') < 0 || pdf.indexOf(Buffer.from('%PDF-'), 0, 'ascii') > 1024) {
+          finish(new Error('La resposta de la Seu no és un document PDF vàlid.'));
+          return;
+        }
+        finish(null, pdf);
+      });
+      response.on('error', error => finish(error));
+    });
+    timeout = setTimeout(() => request.destroy(new Error('La descàrrega del document oficial ha trigat massa.')), REQUEST_TIMEOUT_MS);
+    request.on('error', error => finish(error));
+  });
+}
+
 async function loadParliamentaryTracking({ refresh = false } = {}) {
   if (!refresh && cachedResult && Date.now() - cachedAt < CACHE_MS) {
     return { ...cachedResult, cached: true };
@@ -271,4 +346,4 @@ async function loadParliamentaryTracking({ refresh = false } = {}) {
   return inFlight;
 }
 
-module.exports = { loadParliamentaryTracking, parsePublicationListing, inferStage, buildCategoryUrl, fetchCategory };
+module.exports = { loadParliamentaryTracking, parsePublicationListing, inferStage, buildCategoryUrl, fetchCategory, fetchOfficialPdf };
