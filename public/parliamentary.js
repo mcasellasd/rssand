@@ -79,7 +79,9 @@
       const updatedText = Number.isNaN(updated.getTime()) ? '' : ' · l’' + updated.toLocaleString('ca-AD');
       status.textContent = initiatives.length + ' iniciatives · dades consultades' + updatedText + (data.cached ? ' · memòria cau' : '');
       if (data.partial) {
-        notice.textContent = 'Algunes categories oficials no han respost. La llista pot ser parcial; consulta el registre complet del Consell General.';
+        const incomplete = (data.categoriesChecked || []).filter(category => !category.available || !category.complete);
+        const labels = incomplete.map(category => category.label).join(', ');
+        notice.textContent = 'La consulta no s’ha pogut completar per a totes les categories' + (labels ? ' (' + labels + ')' : '') + '. La llista pot ser parcial; consulta el registre oficial.';
         notice.classList.remove('hide');
       }
       render();

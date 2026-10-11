@@ -9,10 +9,22 @@ const BASE_URL = 'https://seu.consellgeneral.ad/normativaMilloradaAnunciPublic';
 const CATEGORIES = [
   { id: 11, type: 'Projecte de llei', label: 'Projectes de llei' },
   { id: 12, type: 'Proposició de llei', label: 'Proposicions de llei' },
+  { id: 41, type: 'Proposició de llei d’iniciativa parlamentària', label: 'Proposicions de llei d’iniciativa parlamentària' },
+  { id: 42, type: 'Proposició de llei d’iniciativa comunal', label: 'Proposicions de llei d’iniciativa comunal' },
+  { id: 43, type: 'Proposició de llei d’iniciativa popular', label: 'Proposicions de llei d’iniciativa popular' },
+  { id: 14, type: 'Llei del Pressupost General', label: 'Llei del Pressupost General' },
   { id: 15, type: 'Projecte de llei qualificada', label: 'Projectes de llei qualificada' },
-  { id: 16, type: 'Proposició de llei qualificada', label: 'Proposicions de llei qualificada' }
+  { id: 16, type: 'Proposició de llei qualificada', label: 'Proposicions de llei qualificada' },
+  { id: 44, type: 'Proposició de llei qualificada d’iniciativa parlamentària', label: 'Proposicions de llei qualificada d’iniciativa parlamentària' },
+  { id: 45, type: 'Proposició de llei qualificada d’iniciativa comunal', label: 'Proposicions de llei qualificada d’iniciativa comunal' },
+  { id: 46, type: 'Proposició de llei qualificada d’iniciativa popular', label: 'Proposicions de llei qualificada d’iniciativa popular' },
+  { id: 17, type: 'Legislació d’extrema urgència i necessitat', label: 'Legislació d’extrema urgència i necessitat' },
+  { id: 20, type: 'Tractats Internacionals', label: 'Tractats Internacionals' },
+  { id: 21, type: 'Consolidació de la legislació vigent', label: 'Consolidació de la legislació vigent' }
 ];
 const CACHE_MS = 30 * 60 * 1000;
+const PAGE_SIZE = 10;
+const MAX_PAGES_PER_CATEGORY = 100;
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 25000;
 const ISSUER_CERT_PATH = path.join(__dirname, 'certs', 'sectigo-dv-r36.pem');
@@ -76,6 +88,8 @@ function inferStage(text) {
 function parsePublicationListing(html, category) {
   const $ = cheerio.load(html);
   const initiatives = [];
+  const totalMatch = String($.root().text()).match(/(\d+)\s*publicacions?/i);
+  const total = totalMatch ? Number(totalMatch[1]) : null;
 
   $('.dElementPublicacioDefecte').each((_, element) => {
     const entry = $(element);
@@ -112,7 +126,39 @@ function parsePublicationListing(html, category) {
     });
   });
 
-  return initiatives;
+  return { initiatives, total };
+}
+
+function buildCategoryUrl(category, offset = 0) {
+  const url = new URL(`${BASE_URL}/categories`);
+  url.searchParams.set('tipusId', String(category.id));
+  url.searchParams.set('max', String(PAGE_SIZE));
+  url.searchParams.set('offset', String(offset));
+  url.searchParams.set('tipusRecursivo', 'true');
+  return url.href;
+}
+
+async function fetchCategory(category) {
+  const first = parsePublicationListing(await fetchHtml(buildCategoryUrl(category)), category);
+  const rows = [...first.initiatives];
+  const knownTotal = first.total;
+  let offset = PAGE_SIZE;
+  let pages = 1;
+  let reachedEnd = first.initiatives.length < PAGE_SIZE;
+
+  while (!reachedEnd && pages < MAX_PAGES_PER_CATEGORY && (knownTotal == null || offset < knownTotal)) {
+    const page = parsePublicationListing(await fetchHtml(buildCategoryUrl(category, offset)), category);
+    if (page.initiatives.length === 0) {
+      reachedEnd = knownTotal == null || offset >= knownTotal;
+      break;
+    }
+    rows.push(...page.initiatives);
+    pages += 1;
+    offset += PAGE_SIZE;
+    if (page.initiatives.length < PAGE_SIZE) reachedEnd = true;
+  }
+
+  return { initiatives: rows, total: knownTotal, pages, complete: knownTotal == null ? reachedEnd : rows.length >= knownTotal };
 }
 
 function fetchHtml(url) {
@@ -183,18 +229,10 @@ async function loadParliamentaryTracking({ refresh = false } = {}) {
   if (inFlight) return inFlight;
 
   inFlight = (async () => {
-    const categoryResults = await Promise.allSettled(CATEGORIES.map(async category => {
-      const url = new URL(`${BASE_URL}/categories`);
-      url.searchParams.set('tipusId', String(category.id));
-      url.searchParams.set('max', '10');
-      url.searchParams.set('offset', '0');
-      url.searchParams.set('tipusRecursivo', 'true');
-      const html = await fetchHtml(url.href);
-      return parsePublicationListing(html, category);
-    }));
+    const categoryResults = await Promise.allSettled(CATEGORIES.map(fetchCategory));
 
     const failures = categoryResults.filter(result => result.status === 'rejected');
-    const initiatives = categoryResults.flatMap(result => result.status === 'fulfilled' ? result.value : []);
+    const initiatives = categoryResults.flatMap(result => result.status === 'fulfilled' ? result.value.initiatives : []);
     if (initiatives.length === 0) {
       throw new Error(failures[0]?.reason?.message || 'La Seu no ha retornat publicacions legislatives recents.');
     }
@@ -208,9 +246,12 @@ async function loadParliamentaryTracking({ refresh = false } = {}) {
       categoriesChecked: CATEGORIES.map((category, index) => ({
         id: category.id,
         label: category.label,
-        available: categoryResults[index].status === 'fulfilled'
+        available: categoryResults[index].status === 'fulfilled',
+        total: categoryResults[index].status === 'fulfilled' ? categoryResults[index].value.total : null,
+        fetched: categoryResults[index].status === 'fulfilled' ? categoryResults[index].value.initiatives.length : 0,
+        complete: categoryResults[index].status === 'fulfilled' && categoryResults[index].value.complete
       })),
-      partial: failures.length > 0,
+      partial: failures.length > 0 || categoryResults.some(result => result.status === 'fulfilled' && !result.value.complete),
       initiatives: unique,
       cached: false
     };
@@ -222,4 +263,4 @@ async function loadParliamentaryTracking({ refresh = false } = {}) {
   return inFlight;
 }
 
-module.exports = { loadParliamentaryTracking, parsePublicationListing, inferStage };
+module.exports = { loadParliamentaryTracking, parsePublicationListing, inferStage, buildCategoryUrl, fetchCategory };
