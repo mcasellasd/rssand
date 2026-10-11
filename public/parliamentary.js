@@ -6,7 +6,23 @@
   const search = document.getElementById('initiative-search');
   const typeSelect = document.getElementById('initiative-type');
   const refreshButton = document.getElementById('initiative-refresh');
+  const themeButton = document.getElementById('btn-theme-toggle');
   let initiatives = [];
+
+  function applyTheme(isLight) {
+    document.body.classList.toggle('light-mode', isLight);
+    if (!themeButton) return;
+    themeButton.innerHTML = isLight ? '<i class="fa-solid fa-moon"></i>' : '<i class="fa-solid fa-sun"></i>';
+    themeButton.setAttribute('aria-label', isLight ? 'Activa el mode fosc' : 'Activa el mode clar');
+    themeButton.title = isLight ? 'Activa el mode fosc' : 'Activa el mode clar';
+  }
+
+  applyTheme(localStorage.getItem('theme') === 'light');
+  themeButton?.addEventListener('click', () => {
+    const isLight = !document.body.classList.contains('light-mode');
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+    applyTheme(isLight);
+  });
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
