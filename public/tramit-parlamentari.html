@@ -26,14 +26,21 @@
       </div>
     </header>
     <section class="parliament-intro glass-card">
-      <div><span class="eyebrow">Font oficial · Seu Electrònica del Consell General</span><h2>Què s’està tramitant?</h2><p>Consulta les iniciatives legislatives recents, la darrera actuació publicada i els documents oficials disponibles.</p></div>
-      <div class="parliament-controls">
-        <label for="initiative-search">Cerca per títol</label><input id="initiative-search" type="search" placeholder="Ex. habitatge, immigració…">
-        <label for="initiative-type">Tipus d’iniciativa</label><select id="initiative-type"><option value="all">Tots els tipus</option></select>
+      <div><span class="eyebrow">Font oficial · Seu Electrònica del Consell General</span><h2>Què s’està tramitant?</h2><p>Consulta les iniciatives legislatives, l’estat de tramitació, la darrera actuació i els documents oficials.</p></div>
+    </section>
+    <section class="initiative-filters glass-card" aria-label="Filtres d’iniciatives">
+      <div class="filter-search-row">
+        <label class="search-field" for="initiative-search"><span>Cerca</span><span class="search-input-wrap"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input id="initiative-search" type="search" placeholder="Títol, actuació o paraula clau…" autocomplete="off"><kbd>⌘ K</kbd></span></label>
         <button id="initiative-refresh" class="btn-refresh" type="button"><i class="fa-solid fa-rotate"></i> Actualitza</button>
       </div>
+      <div class="filter-selects">
+        <label for="initiative-stage">Estat de tramitació<select id="initiative-stage"><option value="all">Tots els estats</option></select></label>
+        <label for="initiative-type">Categoria<select id="initiative-type"><option value="all">Totes les categories</option></select></label>
+        <label for="initiative-period">Data de publicació<select id="initiative-period"><option value="all">Qualsevol data</option><option value="30">Darrers 30 dies</option><option value="90">Darrers 3 mesos</option><option value="365">Darrer any</option></select></label>
+        <label for="initiative-sort">Ordena per<select id="initiative-sort"><option value="newest">Més recents</option><option value="oldest">Més antigues</option><option value="title">Títol A–Z</option></select></label>
+      </div>
+      <div class="filter-footer"><p id="initiative-status" aria-live="polite">Carregant publicacions oficials…</p><button id="initiative-clear" class="filter-clear" type="button">Neteja els filtres</button><a href="https://seu.consellgeneral.ad/normativaMilloradaAnunciPublic/categories/5" target="_blank" rel="noopener noreferrer">Registre oficial <i class="fa-solid fa-arrow-up-right-from-square"></i></a></div>
     </section>
-    <section class="parliament-meta" aria-live="polite"><p id="initiative-status">Carregant publicacions oficials…</p><a href="https://seu.consellgeneral.ad/normativaMilloradaAnunciPublic/categories?tipusId=11" target="_blank" rel="noopener noreferrer">Obre el registre oficial <i class="fa-solid fa-arrow-up-right-from-square"></i></a></section>
     <div id="initiative-notice" class="initiative-notice hide" role="status"></div>
     <div id="initiative-error" class="initiative-error glass-card hide" role="alert"></div>
     <section id="initiative-list" class="initiative-list" aria-live="polite"></section>

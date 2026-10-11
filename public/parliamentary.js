@@ -4,7 +4,11 @@
   const notice = document.getElementById('initiative-notice');
   const errorBox = document.getElementById('initiative-error');
   const search = document.getElementById('initiative-search');
+  const stageSelect = document.getElementById('initiative-stage');
   const typeSelect = document.getElementById('initiative-type');
+  const periodSelect = document.getElementById('initiative-period');
+  const sortSelect = document.getElementById('initiative-sort');
+  const clearButton = document.getElementById('initiative-clear');
   const refreshButton = document.getElementById('initiative-refresh');
   const themeButton = document.getElementById('btn-theme-toggle');
   let initiatives = [];
@@ -37,15 +41,35 @@
     const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     return match ? match[3] + '/' + match[2] + '/' + match[1] : (value || 'Data no identificada');
   }
+  function stageClass(stage) {
+    const normalized = String(stage || '').toLocaleLowerCase('ca');
+    if (/aprovada|desestimada|closa|retirada/.test(normalized)) return 'is-final';
+    if (/esmen|informe|comissió|comissio|pròrroga|prorroga/.test(normalized)) return 'is-review';
+    if (/pendent|admesa|presentada|tràmit|tramit/.test(normalized)) return 'is-active';
+    return 'is-neutral';
+  }
   function render() {
     const term = search.value.trim().toLocaleLowerCase('ca');
+    const selectedStage = stageSelect.value;
     const selectedType = typeSelect.value;
-    const filtered = initiatives.filter(item =>
-      (!term || (item.title + ' ' + item.latestAction).toLocaleLowerCase('ca').includes(term)) &&
-      (selectedType === 'all' || item.category === selectedType)
-    );
+    const periodDays = Number(periodSelect.value) || 0;
+    const cutoff = periodDays ? new Date(Date.now() - periodDays * 86400000).toISOString().slice(0, 10) : '';
+    const filtered = initiatives.filter(item => {
+      const searchable = [item.title, item.latestAction, item.category, item.type, item.stage].join(' ').toLocaleLowerCase('ca');
+      return (!term || searchable.includes(term)) &&
+        (selectedStage === 'all' || item.stage === selectedStage) &&
+        (selectedType === 'all' || item.category === selectedType) &&
+        (!cutoff || (item.date && item.date >= cutoff));
+    }).sort((a, b) => {
+      if (sortSelect.value === 'title') return a.title.localeCompare(b.title, 'ca');
+      const byDate = (a.date || '').localeCompare(b.date || '');
+      return sortSelect.value === 'oldest' ? byDate : -byDate;
+    });
+    status.textContent = (filtered.length === initiatives.length
+      ? initiatives.length + ' iniciatives'
+      : filtered.length + ' de ' + initiatives.length + ' iniciatives') + (status.dataset.updated || '');
     if (!filtered.length) {
-      list.innerHTML = '<div class="initiative-empty glass-card">No hi ha iniciatives que coincideixin amb aquests filtres.</div>';
+      list.innerHTML = '<div class="initiative-empty glass-card"><i class="fa-solid fa-filter-circle-xmark"></i><strong>Cap resultat amb aquests filtres</strong><span>Canvia la cerca o neteja els filtres per tornar a veure totes les iniciatives.</span></div>';
       return;
     }
     list.innerHTML = filtered.map(item => {
@@ -55,7 +79,7 @@
       const docsHtml = docs ? '<details class="initiative-documents"><summary>' + item.documents.length + ' document(s)</summary><ul>' + docs + '</ul></details>' : '';
       return '<article class="initiative-card glass-card">' +
         '<div class="initiative-card-top"><span class="initiative-kind">' + escapeHtml(item.type) + '</span><time class="initiative-date">' + escapeHtml(displayDate(item.date)) + '</time></div>' +
-        '<h3>' + escapeHtml(item.title) + '</h3><span class="initiative-stage">' + escapeHtml(item.stage) + '</span>' +
+        '<h3>' + escapeHtml(item.title) + '</h3><span class="initiative-stage ' + stageClass(item.stage) + '">' + escapeHtml(item.stage) + '</span>' +
         '<p class="initiative-action">' + escapeHtml(item.latestAction) + '</p>' +
         '<div class="initiative-card-bottom"><a href="' + safeUrl(item.url) + '" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-arrow-up-right-from-square"></i> Fitxa oficial</a>' + docsHtml + '</div></article>';
     }).join('');
@@ -71,13 +95,23 @@
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || data.error || 'No s’han pogut carregar les publicacions.');
       initiatives = data.initiatives || [];
-      const types = [...new Set(initiatives.map(item => item.category).filter(Boolean))];
+      const types = [...new Set(initiatives.map(item => item.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ca'));
+      const stages = [...new Set(initiatives.map(item => item.stage).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ca'));
       const previousType = typeSelect.value;
-      typeSelect.innerHTML = '<option value="all">Tots els tipus</option>' + types.map(type => '<option value="' + escapeHtml(type) + '">' + escapeHtml(type) + '</option>').join('');
+      const previousStage = stageSelect.value;
+      typeSelect.innerHTML = '<option value="all">Totes les categories · ' + initiatives.length + '</option>' + types.map(type => {
+        const count = initiatives.filter(item => item.category === type).length;
+        return '<option value="' + escapeHtml(type) + '">' + escapeHtml(type) + ' · ' + count + '</option>';
+      }).join('');
       typeSelect.value = types.includes(previousType) ? previousType : 'all';
+      stageSelect.innerHTML = '<option value="all">Tots els estats · ' + initiatives.length + '</option>' + stages.map(stage => {
+        const count = initiatives.filter(item => item.stage === stage).length;
+        return '<option value="' + escapeHtml(stage) + '">' + escapeHtml(stage) + ' · ' + count + '</option>';
+      }).join('');
+      stageSelect.value = stages.includes(previousStage) ? previousStage : 'all';
       const updated = new Date(data.updatedAt);
       const updatedText = Number.isNaN(updated.getTime()) ? '' : ' · l’' + updated.toLocaleString('ca-AD');
-      status.textContent = initiatives.length + ' iniciatives · dades consultades' + updatedText + (data.cached ? ' · memòria cau' : '');
+      status.dataset.updated = updatedText + (data.cached ? ' · memòria cau' : '');
       if (data.partial) {
         const incomplete = (data.categoriesChecked || []).filter(category => !category.available || !category.complete);
         const labels = incomplete.map(category => category.label).join(', ');
@@ -96,8 +130,23 @@
       refreshButton.innerHTML = '<i class="fa-solid fa-rotate"></i> Actualitza';
     }
   }
-  search.addEventListener('input', render);
-  typeSelect.addEventListener('change', render);
+  [search, stageSelect, typeSelect, periodSelect, sortSelect].forEach(control => {
+    control.addEventListener(control === search ? 'input' : 'change', render);
+  });
+  clearButton.addEventListener('click', () => {
+    search.value = '';
+    stageSelect.value = 'all';
+    typeSelect.value = 'all';
+    periodSelect.value = 'all';
+    sortSelect.value = 'newest';
+    render();
+  });
+  search.addEventListener('keydown', event => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      search.focus();
+    }
+  });
   refreshButton.addEventListener('click', () => load(true));
   load(false);
 })();

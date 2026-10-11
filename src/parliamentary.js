@@ -70,16 +70,21 @@ function parseDate(text) {
 function inferStage(text) {
   const normalized = cleanText(text).toLocaleLowerCase('ca');
   const rules = [
-    [/\b(desestimat|desestimada|rebutjat|rebutjada|retorn del projecte al govern|retorn del projecte de llei al govern)\b/, 'Retornada o rebutjada'],
+    [/\b(desestimat(?:s|ada|ades)?|rebutjats?|rebutjada|rebutjades)\b/, 'Desestimada'],
+    [/\b(retirada|retirat|retorn del projecte al govern|retorn del projecte de llei al govern)\b/, 'Retirada o retornada'],
     [/\b(llei\s+\d+\/\d{4}|publicada al bopa|publicació al bopa)\b/, 'Aprovada i publicada'],
-    [/\b(aprovada pel consell|aprovat pel consell|s’aprova|s'aprova)\b/, 'Aprovada pel Consell General'],
-    [/\b(esmenes? a la totalitat|esmena a l’articulat|esmena a l'articulat|esmenes presentades)\b/, 'Amb esmenes presentades'],
+    [/\b(aprov(?:at|ada|ats|ades)|s’aprova|s'aprova)\b/, 'Aprovada pel Consell General'],
+    [/\b(tramitació closa|tramitacio closa|procediment clos|procediment tancat)\b/, 'Tramitació closa'],
     [/\b(pròrroga|prorroga|nou termini.*finalitza|sol·licitada.*termini)\b/, 'Termini d’esmenes prorrogat'],
-    [/\b(informe de la (ponència|comissió)|informes de la ponència)\b/, 'En fase d’informes de comissió'],
+    [/\b(esmenes? presentades|esmena a la totalitat|esmena a l’articulat|esmena a l'articulat)\b/, 'Esmenes presentades'],
+    [/\b(informe de la (ponència|comissió)|informes de la ponència|informe favorable|informe desfavorable)\b/, 'En fase d’informes'],
     [/\b(tramesa|tramès|tramesos|es tramet|es trameten)\b.*\bcomissió\b/, 'Tramesa a comissió'],
+    [/\b(termini.*esmenes|presentació d’esmenes|presentacio d'esmenes)\b/, 'Termini d’esmenes obert'],
     [/\b(disponible per (a|al|la) sessió|ple del consell|sessió ordinària)\b/, 'Pendent de debat al Ple'],
-    [/\b(termini per a la presentació d’esmenes|termini de presentació d’esmenes|termini.*esmenes.*finalitza)\b/, 'Termini d’esmenes obert'],
-    [/\b(admissió a tràmit|obertura del termini)\b/, 'Admesa a tràmit']
+    [/\b(presa en consideració|presa en consideracio)\b/, 'Pendent de presa en consideració'],
+    [/\b(criteri favorable|criteri desfavorable|ha presentat criteri)\b/, 'Criteri del Govern presentat'],
+    [/\b(admissió a tràmit|admissio a tramit|obertura del termini)\b/, 'Admesa a tràmit'],
+    [/\b(presentada|presentat|registre de publicació|registre de publicacio)\b/, 'Presentada']
   ];
   for (const [pattern, stage] of rules) {
     if (pattern.test(normalized)) return stage;
