@@ -46,6 +46,12 @@
     <section id="initiative-list" class="initiative-list" aria-live="polite"></section>
     <p class="parliament-footnote">L’estat és un resum automàtic de les publicacions disponibles. Comprova sempre la cronologia i els documents a la fitxa oficial.</p>
   </main>
+  <dialog id="initiative-summary-dialog" class="summary-dialog" aria-labelledby="summary-dialog-title">
+    <div class="summary-dialog-header"><div><span class="eyebrow">Anàlisi basada en fonts oficials</span><h2 id="summary-dialog-title">Resum ampliat</h2></div><button class="summary-close" type="button" aria-label="Tanca el resum"><i class="fa-solid fa-xmark"></i></button></div>
+    <p class="summary-dialog-subtitle"></p>
+    <div class="summary-dialog-content" aria-live="polite"></div>
+    <div class="summary-dialog-sources"></div>
+  </dialog>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" defer></script>
   <script src="parliamentary.js" defer></script>
 </body>
