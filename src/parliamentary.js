@@ -127,6 +127,7 @@ function parsePublicationListing(html, category) {
       date: parseDate(entry.find('.data-registre-publicacions').first().text()),
       stage: inferStage(latestAction),
       latestAction,
+      history: events,
       url: registerHref,
       documents: documents.slice(0, 8),
       source: 'Seu Electrònica del Consell General'
