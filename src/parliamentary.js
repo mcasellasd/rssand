@@ -19,6 +19,8 @@ const CATEGORIES = [
   { id: 45, type: 'Proposició de llei qualificada d’iniciativa comunal', label: 'Proposicions de llei qualificada d’iniciativa comunal' },
   { id: 46, type: 'Proposició de llei qualificada d’iniciativa popular', label: 'Proposicions de llei qualificada d’iniciativa popular' },
   { id: 17, type: 'Legislació d’extrema urgència i necessitat', label: 'Legislació d’extrema urgència i necessitat' },
+  { id: 18, type: 'Lleis de lectura única', label: 'Lleis de lectura única' },
+  { id: 19, type: 'Reforma constitucional', label: 'Reforma constitucional' },
   { id: 20, type: 'Tractats Internacionals', label: 'Tractats Internacionals' },
   { id: 21, type: 'Consolidació de la legislació vigent', label: 'Consolidació de la legislació vigent' }
 ];
