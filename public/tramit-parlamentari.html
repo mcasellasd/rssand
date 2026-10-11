@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Seguiment de projectes i proposicions de llei publicats pel Consell General d’Andorra.">
+  <title>Seguiment parlamentari · Actualitat Jurídica Andorrana</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="parliamentary.css">
+</head>
+<body>
+  <div class="glass-bg-blobs" aria-hidden="true"><div class="blob blob-1"></div><div class="blob blob-2"></div><div class="blob blob-3"></div></div>
+  <main class="parliament-page app-container">
+    <header class="app-header parliament-header">
+      <div class="logo-area">
+        <div class="logo-icon"><i class="fa-solid fa-landmark"></i></div>
+        <div><h1>Seguiment <span>parlamentari</span></h1><p class="subtitle">Iniciatives i darreres publicacions oficials del Consell General</p></div>
+      </div>
+      <a class="parliament-link" href="/"><i class="fa-solid fa-arrow-left"></i> Tornar a l’actualitat</a>
+    </header>
+    <section class="parliament-intro glass-card">
+      <div><span class="eyebrow">Font oficial · Seu Electrònica del Consell General</span><h2>Què s’està tramitant?</h2><p>Consulta les iniciatives legislatives recents, la darrera actuació publicada i els documents oficials disponibles.</p></div>
+      <div class="parliament-controls">
+        <label for="initiative-search">Cerca per títol</label><input id="initiative-search" type="search" placeholder="Ex. habitatge, immigració…">
+        <label for="initiative-type">Tipus d’iniciativa</label><select id="initiative-type"><option value="all">Tots els tipus</option></select>
+        <button id="initiative-refresh" class="btn-refresh" type="button"><i class="fa-solid fa-rotate"></i> Actualitza</button>
+      </div>
+    </section>
+    <section class="parliament-meta" aria-live="polite"><p id="initiative-status">Carregant publicacions oficials…</p><a href="https://seu.consellgeneral.ad/normativaMilloradaAnunciPublic/categories?tipusId=11" target="_blank" rel="noopener noreferrer">Obre el registre oficial <i class="fa-solid fa-arrow-up-right-from-square"></i></a></section>
+    <div id="initiative-notice" class="initiative-notice hide" role="status"></div>
+    <div id="initiative-error" class="initiative-error glass-card hide" role="alert"></div>
+    <section id="initiative-list" class="initiative-list" aria-live="polite"></section>
+    <p class="parliament-footnote">L’estat és un resum automàtic de les publicacions disponibles. Comprova sempre la cronologia i els documents a la fitxa oficial.</p>
+  </main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" defer></script>
+  <script src="parliamentary.js" defer></script>
+</body>
+</html>

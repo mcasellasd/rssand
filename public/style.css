@@ -852,6 +852,25 @@ input:checked + .slider:before {
     border-radius: 4px;
 }
 
+.parliament-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 10px;
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.parliament-link:hover {
+    color: var(--text-primary);
+    background: rgba(59, 130, 246, 0.2);
+}
+
 .tab-btn {
     background: none;
     border: 1px solid transparent;

@@ -5,6 +5,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { GoogleGenAI } = require('@google/genai');
+const { loadParliamentaryTracking } = require('./src/parliamentary');
 
 const ai = process.env.GEMINI_API_KEY && process.env.DISABLE_AI !== 'true'
   ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
@@ -1368,6 +1369,21 @@ app.get('/api/news', async (req, res) => {
   } catch (err) {
     console.error("Error serving news:", err);
     res.status(500).json({ error: "Error carregant les notícies." });
+  }
+});
+
+app.get('/api/parliamentary-tracking', async (req, res) => {
+  try {
+    const data = await loadParliamentaryTracking({ refresh: req.query.refresh === 'true' });
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json(data);
+  } catch (error) {
+    console.error('Error carregant el seguiment parlamentari:', error.message);
+    res.status(502).json({
+      error: 'No s’ha pogut consultar la Seu Electrònica del Consell General.',
+      message: error.message,
+      sourceUrl: 'https://seu.consellgeneral.ad/normativaMilloradaAnunciPublic/categories?tipusId=11'
+    });
   }
 });
 
