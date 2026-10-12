@@ -1965,6 +1965,46 @@ function scheduleDailySummary() {
   setTimeout(() => scheduleDailySummary(), delay);
 }
 
+function millisecondsUntilParliamentaryRefresh(now = new Date()) {
+  const firstMinute = new Date(now);
+  firstMinute.setSeconds(0, 0);
+  if (firstMinute.getTime() <= now.getTime()) firstMinute.setMinutes(firstMinute.getMinutes() + 1);
+  for (let minutes = 0; minutes <= 48 * 60; minutes += 1) {
+    const candidate = new Date(firstMinute.getTime() + minutes * 60 * 1000);
+    const parts = getZonedDateParts(candidate);
+    if (Number(parts.hour) === 8 && Number(parts.minute) === 15) return candidate.getTime() - now.getTime();
+  }
+  return 60 * 60 * 1000;
+}
+
+async function refreshParliamentaryData(reason) {
+  try {
+    const data = await loadParliamentaryTracking({ refresh: true });
+    if (data.refreshWarning) {
+      console.warn(`Actualització parlamentària ${reason} incompleta: ${data.refreshWarning}`);
+      return;
+    }
+    console.log(`Seguiment parlamentari actualitzat (${reason}): ${data.initiatives.length} iniciatives; ${data.updatedAt}.`);
+  } catch (error) {
+    console.error(`Error en l’actualització parlamentària ${reason}:`, error.message);
+  }
+}
+
+function scheduleNextParliamentaryRefresh() {
+  const delay = millisecondsUntilParliamentaryRefresh();
+  setTimeout(async () => {
+    await refreshParliamentaryData('diària');
+    scheduleNextParliamentaryRefresh();
+  }, delay);
+}
+
+function startParliamentaryRefreshScheduler() {
+  // Catch up on startup, then refresh daily at 08:15 in APP_TIME_ZONE.
+  refreshParliamentaryData('inici del servidor');
+  scheduleNextParliamentaryRefresh();
+}
+
+
 // API Endpoint to get AI-generated weekly summary
 app.get('/api/news/summary', async (req, res) => {
   try {
@@ -2376,6 +2416,7 @@ if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
     scheduleDailySummary();
+    startParliamentaryRefreshScheduler();
   });
 }
 
