@@ -42,6 +42,46 @@
       return url.protocol === 'https:' && url.hostname === 'seu.consellgeneral.ad' ? url.href : '#';
     } catch (_) { return '#'; }
   }
+  function renderSummary(markdown) {
+    const root = document.createElement('div');
+    root.className = 'summary-document';
+    const lines = String(markdown || '').replace(/\r/g, '').split('\n');
+    let paragraph = [];
+    let list = null;
+    const inline = text => escapeHtml(text)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>');
+    const flushParagraph = () => {
+      if (!paragraph.length) return;
+      const node = document.createElement('p');
+      node.innerHTML = inline(paragraph.join(' '));
+      root.append(node);
+      paragraph = [];
+    };
+    const closeList = () => { if (list) { root.append(list); list = null; } };
+    lines.forEach(line => {
+      const heading = line.match(/^\s*(#{1,3})\s+(.+)$/);
+      const bullet = line.match(/^\s*(?:[-*•]|\d+[.)])\s+(.+)$/);
+      if (heading) {
+        flushParagraph(); closeList();
+        const node = document.createElement(heading[1].length === 1 ? 'h2' : 'h3');
+        node.innerHTML = inline(heading[2]);
+        root.append(node);
+      } else if (bullet) {
+        flushParagraph();
+        if (!list) list = document.createElement(/^\s*\d/.test(line) ? 'ol' : 'ul');
+        const node = document.createElement('li');
+        node.innerHTML = inline(bullet[1]);
+        list.append(node);
+      } else if (!line.trim()) {
+        flushParagraph(); closeList();
+      } else {
+        closeList(); paragraph.push(line.trim());
+      }
+    });
+    flushParagraph(); closeList();
+    return root;
+  }
   function displayDate(value) {
     const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     return match ? match[3] + '/' + match[2] + '/' + match[1] : (value || 'Data no identificada');
@@ -105,7 +145,7 @@
       const response = await fetch('/api/parliamentary-tracking/' + encodeURIComponent(item.id) + '/summary', { method: 'POST' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'No s’ha pogut generar el resum.');
-      summaryContent.textContent = data.summary;
+      summaryContent.replaceChildren(renderSummary(data.summary));
       summaryContent.classList.remove('is-loading');
       if (Array.isArray(data.sources) && data.sources.length) {
         const heading = document.createElement('h3');
@@ -139,6 +179,14 @@
     if (button) showSummary(button);
   });
   summaryDialog.querySelector('.summary-close').addEventListener('click', () => summaryDialog.close());
+  const expandButton = summaryDialog.querySelector('.summary-expand');
+  expandButton.addEventListener('click', () => {
+    const expanded = summaryDialog.classList.toggle('is-expanded');
+    expandButton.setAttribute('aria-label', expanded ? 'Redueix el resum' : 'Amplia el resum');
+    expandButton.title = expanded ? 'Redueix el resum' : 'Amplia el resum';
+    expandButton.innerHTML = '<i class="fa-solid ' + (expanded ? 'fa-compress' : 'fa-expand') + '" aria-hidden="true"></i>';
+  });
+
   summaryDialog.addEventListener('click', event => {
     if (event.target === summaryDialog) summaryDialog.close();
   });
