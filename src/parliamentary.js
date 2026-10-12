@@ -24,7 +24,7 @@ const CATEGORIES = [
   { id: 20, type: 'Tractats Internacionals', label: 'Tractats Internacionals' },
   { id: 21, type: 'Consolidació de la legislació vigent', label: 'Consolidació de la legislació vigent' }
 ];
-const CACHE_MS = 30 * 60 * 1000;
+const CACHE_MS = 24 * 60 * 60 * 1000;
 const PAGE_SIZE = 10;
 const MAX_PAGES_PER_CATEGORY = 100;
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
@@ -338,8 +338,16 @@ async function loadParliamentaryTracking({ refresh = false } = {}) {
       initiatives: unique,
       cached: false
     };
-    cachedResult = result;
     cachedAt = Date.now();
+    if (result.partial && cachedResult && !cachedResult.partial) {
+      return {
+        ...cachedResult,
+        cached: true,
+        refreshWarning: 'La consulta diària ha estat incompleta; es conserva l’última actualització completa.',
+        lastRefreshAttemptAt: result.updatedAt
+      };
+    }
+    cachedResult = result;
     return result;
   })().finally(() => { inFlight = null; });
 
