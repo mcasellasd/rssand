@@ -62,6 +62,10 @@ El briefing setmanal només es pot generar una vegada per dia natural (hora d’
 
 El servidor prepara automàticament, cada dia a les 08:00, el resum de les publicacions del dia anterior. El resum queda disponible a `/api/news/daily-summary` i es mostra a la targeta `Resum diari` de la interfície. Si el procés es reinicia després de les 08:00, la primera consulta recupera el resum pendent i el genera.
 
+## Actualització diària del seguiment parlamentari
+
+En iniciar-se, el servidor consulta el registre oficial del Consell General. Després força una actualització cada dia a les 08:15, segons `APP_TIME_ZONE` (per defecte, hora d’Andorra). Les dades consultades es conserven en memòria durant 24 hores. Si una actualització és incompleta i ja hi ha una còpia completa, aquesta es manté i la interfície n’avisa. El planificador s’executa dins del procés Node.js; cal que el servei estigui en marxa perquè faci la consulta a l’hora prevista. Si s’inicia més tard, la consulta d’arrencada posa les dades al dia.
+
 ## Lectura professional
 
 Cada publicació incorpora una pauta editorial determinista i traçable:

@@ -9,10 +9,24 @@ const BASE_URL = 'https://seu.consellgeneral.ad/normativaMilloradaAnunciPublic';
 const CATEGORIES = [
   { id: 11, type: 'Projecte de llei', label: 'Projectes de llei' },
   { id: 12, type: 'Proposició de llei', label: 'Proposicions de llei' },
+  { id: 41, type: 'Proposició de llei d’iniciativa parlamentària', label: 'Proposicions de llei d’iniciativa parlamentària' },
+  { id: 42, type: 'Proposició de llei d’iniciativa comunal', label: 'Proposicions de llei d’iniciativa comunal' },
+  { id: 43, type: 'Proposició de llei d’iniciativa popular', label: 'Proposicions de llei d’iniciativa popular' },
+  { id: 14, type: 'Llei del Pressupost General', label: 'Llei del Pressupost General' },
   { id: 15, type: 'Projecte de llei qualificada', label: 'Projectes de llei qualificada' },
-  { id: 16, type: 'Proposició de llei qualificada', label: 'Proposicions de llei qualificada' }
+  { id: 16, type: 'Proposició de llei qualificada', label: 'Proposicions de llei qualificada' },
+  { id: 44, type: 'Proposició de llei qualificada d’iniciativa parlamentària', label: 'Proposicions de llei qualificada d’iniciativa parlamentària' },
+  { id: 45, type: 'Proposició de llei qualificada d’iniciativa comunal', label: 'Proposicions de llei qualificada d’iniciativa comunal' },
+  { id: 46, type: 'Proposició de llei qualificada d’iniciativa popular', label: 'Proposicions de llei qualificada d’iniciativa popular' },
+  { id: 17, type: 'Legislació d’extrema urgència i necessitat', label: 'Legislació d’extrema urgència i necessitat' },
+  { id: 18, type: 'Lleis de lectura única', label: 'Lleis de lectura única' },
+  { id: 19, type: 'Reforma constitucional', label: 'Reforma constitucional' },
+  { id: 20, type: 'Tractats Internacionals', label: 'Tractats Internacionals' },
+  { id: 21, type: 'Consolidació de la legislació vigent', label: 'Consolidació de la legislació vigent' }
 ];
-const CACHE_MS = 30 * 60 * 1000;
+const CACHE_MS = 24 * 60 * 60 * 1000;
+const PAGE_SIZE = 10;
+const MAX_PAGES_PER_CATEGORY = 100;
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 25000;
 const ISSUER_CERT_PATH = path.join(__dirname, 'certs', 'sectigo-dv-r36.pem');
@@ -56,16 +70,21 @@ function parseDate(text) {
 function inferStage(text) {
   const normalized = cleanText(text).toLocaleLowerCase('ca');
   const rules = [
-    [/\b(desestimat|desestimada|rebutjat|rebutjada|retorn del projecte al govern|retorn del projecte de llei al govern)\b/, 'Retornada o rebutjada'],
+    [/\b(desestimat(?:s|ada|ades)?|rebutjats?|rebutjada|rebutjades)\b/, 'Desestimada'],
+    [/\b(retirada|retirat|retorn del projecte al govern|retorn del projecte de llei al govern)\b/, 'Retirada o retornada'],
     [/\b(llei\s+\d+\/\d{4}|publicada al bopa|publicació al bopa)\b/, 'Aprovada i publicada'],
-    [/\b(aprovada pel consell|aprovat pel consell|s’aprova|s'aprova)\b/, 'Aprovada pel Consell General'],
-    [/\b(esmenes? a la totalitat|esmena a l’articulat|esmena a l'articulat|esmenes presentades)\b/, 'Amb esmenes presentades'],
+    [/\b(aprov(?:at|ada|ats|ades)|s’aprova|s'aprova)\b/, 'Aprovada pel Consell General'],
+    [/\b(tramitació closa|tramitacio closa|procediment clos|procediment tancat)\b/, 'Tramitació closa'],
     [/\b(pròrroga|prorroga|nou termini.*finalitza|sol·licitada.*termini)\b/, 'Termini d’esmenes prorrogat'],
-    [/\b(informe de la (ponència|comissió)|informes de la ponència)\b/, 'En fase d’informes de comissió'],
+    [/\b(esmenes? presentades|esmena a la totalitat|esmena a l’articulat|esmena a l'articulat)\b/, 'Esmenes presentades'],
+    [/\b(informe de la (ponència|comissió)|informes de la ponència|informe favorable|informe desfavorable)\b/, 'En fase d’informes'],
     [/\b(tramesa|tramès|tramesos|es tramet|es trameten)\b.*\bcomissió\b/, 'Tramesa a comissió'],
+    [/\b(termini.*esmenes|presentació d’esmenes|presentacio d'esmenes)\b/, 'Termini d’esmenes obert'],
     [/\b(disponible per (a|al|la) sessió|ple del consell|sessió ordinària)\b/, 'Pendent de debat al Ple'],
-    [/\b(termini per a la presentació d’esmenes|termini de presentació d’esmenes|termini.*esmenes.*finalitza)\b/, 'Termini d’esmenes obert'],
-    [/\b(admissió a tràmit|obertura del termini)\b/, 'Admesa a tràmit']
+    [/\b(presa en consideració|presa en consideracio)\b/, 'Pendent de presa en consideració'],
+    [/\b(criteri favorable|criteri desfavorable|ha presentat criteri)\b/, 'Criteri del Govern presentat'],
+    [/\b(admissió a tràmit|admissio a tramit|obertura del termini)\b/, 'Admesa a tràmit'],
+    [/\b(presentada|presentat|registre de publicació|registre de publicacio)\b/, 'Presentada']
   ];
   for (const [pattern, stage] of rules) {
     if (pattern.test(normalized)) return stage;
@@ -76,6 +95,8 @@ function inferStage(text) {
 function parsePublicationListing(html, category) {
   const $ = cheerio.load(html);
   const initiatives = [];
+  const totalMatch = cleanText($.root().text()).match(/\bCerca\s+([\d.,\s]+)\s+publicacions?\b/i);
+  const total = totalMatch ? Number(totalMatch[1].replace(/\D/g, '')) : null;
 
   $('.dElementPublicacioDefecte').each((_, element) => {
     const entry = $(element);
@@ -106,13 +127,46 @@ function parsePublicationListing(html, category) {
       date: parseDate(entry.find('.data-registre-publicacions').first().text()),
       stage: inferStage(latestAction),
       latestAction,
+      history: events,
       url: registerHref,
       documents: documents.slice(0, 8),
       source: 'Seu Electrònica del Consell General'
     });
   });
 
-  return initiatives;
+  return { initiatives, total };
+}
+
+function buildCategoryUrl(category, offset = 0) {
+  const url = new URL(`${BASE_URL}/categories`);
+  url.searchParams.set('tipusId', String(category.id));
+  url.searchParams.set('max', String(PAGE_SIZE));
+  url.searchParams.set('offset', String(offset));
+  url.searchParams.set('tipusRecursivo', 'true');
+  return url.href;
+}
+
+async function fetchCategory(category) {
+  const first = parsePublicationListing(await fetchHtml(buildCategoryUrl(category)), category);
+  const rows = [...first.initiatives];
+  const knownTotal = first.total;
+  let offset = PAGE_SIZE;
+  let pages = 1;
+  let reachedEnd = first.initiatives.length < PAGE_SIZE;
+
+  while (!reachedEnd && pages < MAX_PAGES_PER_CATEGORY && (knownTotal == null || offset < knownTotal)) {
+    const page = parsePublicationListing(await fetchHtml(buildCategoryUrl(category, offset)), category);
+    if (page.initiatives.length === 0) {
+      reachedEnd = knownTotal == null || offset >= knownTotal;
+      break;
+    }
+    rows.push(...page.initiatives);
+    pages += 1;
+    offset += PAGE_SIZE;
+    if (page.initiatives.length < PAGE_SIZE) reachedEnd = true;
+  }
+
+  return { initiatives: rows, total: knownTotal, pages, complete: knownTotal == null ? reachedEnd : rows.length >= knownTotal };
 }
 
 function fetchHtml(url) {
@@ -176,6 +230,81 @@ function fetchHtml(url) {
   });
 }
 
+function fetchOfficialPdf(url, redirects = 0) {
+  let target;
+  try { target = new URL(url); } catch (_) {
+    return Promise.reject(new Error('L’enllaç del document oficial no és vàlid.'));
+  }
+  if (target.hostname !== 'seu.consellgeneral.ad' || target.protocol !== 'https:' || (!redirects && !target.pathname.startsWith('/documentPublic/download/'))) {
+    return Promise.reject(new Error('S’ha bloquejat una URL externa a la Seu Electrònica.'));
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timeout;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const request = https.get(target, {
+      agent: officialAgent,
+      headers: { 'User-Agent': 'ActualitatJuridicaAndorrana/1.0 (documents oficials)' }
+    }, response => {
+      const status = response.statusCode || 0;
+      if ([301, 302, 303, 307, 308].includes(status)) {
+        const location = response.headers.location;
+        response.resume();
+        if (!location || redirects >= 3) {
+          finish(new Error('La descàrrega del document oficial ha retornat una redirecció no vàlida.'));
+          return;
+        }
+        let next;
+        try { next = new URL(location, target); } catch (_) {
+          finish(new Error('La Seu ha retornat una redirecció no vàlida.'));
+          return;
+        }
+        if (next.protocol !== 'https:' || next.hostname !== 'seu.consellgeneral.ad') {
+          finish(new Error('S’ha bloquejat una redirecció fora de la Seu Electrònica.'));
+          return;
+        }
+        fetchOfficialPdf(next.href, redirects + 1).then(value => finish(null, value), finish);
+        return;
+      }
+      if (status < 200 || status >= 300) {
+        response.resume();
+        finish(new Error(`La Seu Electrònica ha retornat HTTP ${status} en descarregar un document.`));
+        return;
+      }
+      const chunks = [];
+      let bytes = 0;
+      response.on('data', chunk => {
+        if (settled) return;
+        bytes += chunk.length;
+        if (bytes > 20 * 1024 * 1024) {
+          finish(new Error('El document supera els 20 MB admesos.'));
+          response.destroy();
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.on('end', () => {
+        const pdf = Buffer.concat(chunks);
+        if (pdf.indexOf(Buffer.from('%PDF-'), 0, 'ascii') < 0 || pdf.indexOf(Buffer.from('%PDF-'), 0, 'ascii') > 1024) {
+          finish(new Error('La resposta de la Seu no és un document PDF vàlid.'));
+          return;
+        }
+        finish(null, pdf);
+      });
+      response.on('error', error => finish(error));
+    });
+    timeout = setTimeout(() => request.destroy(new Error('La descàrrega del document oficial ha trigat massa.')), REQUEST_TIMEOUT_MS);
+    request.on('error', error => finish(error));
+  });
+}
+
 async function loadParliamentaryTracking({ refresh = false } = {}) {
   if (!refresh && cachedResult && Date.now() - cachedAt < CACHE_MS) {
     return { ...cachedResult, cached: true };
@@ -183,18 +312,10 @@ async function loadParliamentaryTracking({ refresh = false } = {}) {
   if (inFlight) return inFlight;
 
   inFlight = (async () => {
-    const categoryResults = await Promise.allSettled(CATEGORIES.map(async category => {
-      const url = new URL(`${BASE_URL}/categories`);
-      url.searchParams.set('tipusId', String(category.id));
-      url.searchParams.set('max', '10');
-      url.searchParams.set('offset', '0');
-      url.searchParams.set('tipusRecursivo', 'true');
-      const html = await fetchHtml(url.href);
-      return parsePublicationListing(html, category);
-    }));
+    const categoryResults = await Promise.allSettled(CATEGORIES.map(fetchCategory));
 
     const failures = categoryResults.filter(result => result.status === 'rejected');
-    const initiatives = categoryResults.flatMap(result => result.status === 'fulfilled' ? result.value : []);
+    const initiatives = categoryResults.flatMap(result => result.status === 'fulfilled' ? result.value.initiatives : []);
     if (initiatives.length === 0) {
       throw new Error(failures[0]?.reason?.message || 'La Seu no ha retornat publicacions legislatives recents.');
     }
@@ -208,18 +329,29 @@ async function loadParliamentaryTracking({ refresh = false } = {}) {
       categoriesChecked: CATEGORIES.map((category, index) => ({
         id: category.id,
         label: category.label,
-        available: categoryResults[index].status === 'fulfilled'
+        available: categoryResults[index].status === 'fulfilled',
+        total: categoryResults[index].status === 'fulfilled' ? categoryResults[index].value.total : null,
+        fetched: categoryResults[index].status === 'fulfilled' ? categoryResults[index].value.initiatives.length : 0,
+        complete: categoryResults[index].status === 'fulfilled' && categoryResults[index].value.complete
       })),
-      partial: failures.length > 0,
+      partial: failures.length > 0 || categoryResults.some(result => result.status === 'fulfilled' && !result.value.complete),
       initiatives: unique,
       cached: false
     };
-    cachedResult = result;
     cachedAt = Date.now();
+    if (result.partial && cachedResult && !cachedResult.partial) {
+      return {
+        ...cachedResult,
+        cached: true,
+        refreshWarning: 'La consulta diària ha estat incompleta; es conserva l’última actualització completa.',
+        lastRefreshAttemptAt: result.updatedAt
+      };
+    }
+    cachedResult = result;
     return result;
   })().finally(() => { inFlight = null; });
 
   return inFlight;
 }
 
-module.exports = { loadParliamentaryTracking, parsePublicationListing, inferStage };
+module.exports = { loadParliamentaryTracking, parsePublicationListing, inferStage, buildCategoryUrl, fetchCategory, fetchOfficialPdf };
