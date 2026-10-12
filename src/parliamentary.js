@@ -95,8 +95,8 @@ function inferStage(text) {
 function parsePublicationListing(html, category) {
   const $ = cheerio.load(html);
   const initiatives = [];
-  const totalMatch = String($.root().text()).match(/(\d+)\s*publicacions?/i);
-  const total = totalMatch ? Number(totalMatch[1]) : null;
+  const totalMatch = cleanText($.root().text()).match(/\bCerca\s+([\d.,\s]+)\s+publicacions?\b/i);
+  const total = totalMatch ? Number(totalMatch[1].replace(/\D/g, '')) : null;
 
   $('.dElementPublicacioDefecte').each((_, element) => {
     const entry = $(element);
