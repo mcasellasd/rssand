@@ -149,7 +149,7 @@ function matchesInitiative(item, meeting) {
 async function fetchAgendaPage(url) {
   const target = new URL(url);
   if (target.protocol !== 'https:' || target.hostname !== 'www.consellgeneral.ad' ||
-      !target.pathname.startsWith('/ca/agenda/')) {
+      (target.pathname !== '/ca/agenda' && !target.pathname.startsWith('/ca/agenda/'))) {
     throw new Error('S’ha bloquejat una adreça fora de l’agenda oficial.');
   }
   const response = await fetch(target, {
