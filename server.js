@@ -5,7 +5,8 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { GoogleGenAI } = require('@google/genai');
-const { loadParliamentaryTracking, fetchOfficialPdf } = require('./src/parliamentary');\nconst { loadParliamentaryAgenda, attachAgendaMeetings } = require('./src/parliamentary-agenda');
+const { loadParliamentaryTracking, fetchOfficialPdf } = require('./src/parliamentary');
+const { loadParliamentaryAgenda, attachAgendaMeetings } = require('./src/parliamentary-agenda');
 
 const ai = process.env.GEMINI_API_KEY && process.env.DISABLE_AI !== 'true'
   ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
