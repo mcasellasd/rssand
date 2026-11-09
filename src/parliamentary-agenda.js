@@ -142,9 +142,11 @@ function initiativeTokens(value) {
 function matchesInitiative(item, meeting) {
   const titleTokens = [...new Set(initiativeTokens(item.title))];
   if (!titleTokens.length) return false;
-  const agendaText = normalize(meeting.agendaItems.join(' '));
-  const matched = titleTokens.filter(token => agendaText.includes(token)).length;
-  return matched >= Math.min(2, titleTokens.length) && matched / titleTokens.length >= 0.6;
+  return meeting.agendaItems.some(point => {
+    const pointTokens = new Set(normalize(point).split(' '));
+    const matched = titleTokens.filter(token => pointTokens.has(token)).length;
+    return matched >= Math.min(2, titleTokens.length) && matched / titleTokens.length >= 0.6;
+  });
 }
 async function fetchAgendaPage(url) {
   const target = new URL(url);
@@ -172,7 +174,10 @@ function nextWeekUrl(html) {
     url.pathname.startsWith('/ca/agenda/') ? url.href : null;
 }
 async function loadParliamentaryAgenda({ refresh = false } = {}) {
-  if (!refresh && cached && Date.now() - cachedAt < CACHE_MS) return { ...cached, cached: true };
+  if (!refresh && cached && Date.now() - cachedAt < CACHE_MS) {
+    const today = todayInAndorra();
+    return { ...cached, meetings: cached.meetings.filter(meeting => meeting.date >= today), cached: true };
+  }
   if (inFlight) return inFlight;
   inFlight = (async () => {
     const currentHtml = await fetchAgendaPage(AGENDA_URL);
@@ -186,7 +191,10 @@ async function loadParliamentaryAgenda({ refresh = false } = {}) {
     cachedAt = Date.now();
     return { ...cached, cached: false };
   })().catch(error => {
-    if (cached) return { ...cached, cached: true, warning: error.message };
+    if (cached) {
+      const today = todayInAndorra();
+      return { ...cached, meetings: cached.meetings.filter(meeting => meeting.date >= today), cached: true, warning: error.message };
+    }
     throw error;
   }).finally(() => { inFlight = null; });
   return inFlight;
@@ -194,7 +202,7 @@ async function loadParliamentaryAgenda({ refresh = false } = {}) {
 function attachAgendaMeetings(initiatives, meetings) {
   return initiatives.map(item => ({
     ...item,
-    agendaMeetings: meetings.filter(meeting => matchesInitiative(item, meeting))
+    agendaMeetings: meetings.filter(meeting => meeting.date >= todayInAndorra() && matchesInitiative(item, meeting))
   }));
 }
 module.exports = { loadParliamentaryAgenda, attachAgendaMeetings, parseAgenda, matchesInitiative };
