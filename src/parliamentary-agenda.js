@@ -99,9 +99,9 @@ function parseAgenda(html) {
   $('.tileItemLlistat').each((_, element) => {
     const tile = $(element);
     const namedDate = String(tile.find('a[name]').first().attr('name') || '')
-      .match(/^(20\\d{2}-\\d{2}-\\d{2})$/);
+      .match(/^(20\d{2}-\d{2}-\d{2})$/);
     const heading = normalize(tile.find('.tileItemAgendaTitle').first().text());
-    const day = heading.match(/^(dilluns|dimarts|dimecres|dijous|divendres|dissabte|diumenge)\\s+(\\d{1,2})$/);
+    const day = heading.match(/^(dilluns|dimarts|dimecres|dijous|divendres|dissabte|diumenge)\s+(\d{1,2})$/);
     const date = namedDate?.[1] || (day && dayDate(
       Number(day[2]),
       WEEKDAYS.get(day[1]),
@@ -111,7 +111,7 @@ function parseAgenda(html) {
     const url = agendaHref(anchor.attr('href'));
     const title = cleanText(anchor.attr('title') || anchor.text());
     const timeMatch = cleanText(tile.find('.eventAgendaDate').first().text())
-      .match(/\\b([01]?\\d|2[0-3]):([0-5]\\d)\\s*h?\\b/i);
+      .match(/\b([01]?\d|2[0-3]):([0-5]\d)\s*h?\b/i);
     const content = tile.find('.eventAgendaContent').first();
     const agendaItems = content.find('ol > li').toArray()
       .map(item => cleanText($(item).text()))
