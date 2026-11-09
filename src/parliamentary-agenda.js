@@ -94,45 +94,43 @@ function parseAgenda(html) {
   const $ = cheerio.load(html);
   const pageText = cleanText($('body').text());
   const weekStart = parseWeekStart(pageText);
-  const elements = $('body').find('*').toArray();
-  const order = new Map(elements.map((element, index) => [element, index]));
-  const dayHeadings = [];
-  for (const element of elements) {
-    const text = cleanText($(element).text());
-    if (text.length > 60) continue;
-    const match = normalize(text).match(/^(dilluns|dimarts|dimecres|dijous|divendres|dissabte|diumenge)\s*,?\s*(\d{1,2})$/);
-    if (!match) continue;
-    const date = dayDate(Number(match[2]), WEEKDAYS.get(match[1]), weekStart);
-    if (date) dayHeadings.push({ index: order.get(element), date });
-  }
-
   const meetings = [];
-  const seen = new Set();
-  $('a[href]').each((_, anchor) => {
-    const url = agendaHref($(anchor).attr('href'));
-    if (!url || seen.has(url)) return;
-    const title = cleanText($(anchor).text());
-    if (!title || title.length > 180) return;
-    const card = eventContainer($, anchor);
-    if (!card) return;
-    const text = cleanText(card.text());
-    const match = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\s*h?\b/i);
-    const index = order.get(anchor) ?? 0;
-    const priorDay = [...dayHeadings].reverse().find(item => item.index < index);
-    const date = dateFromSlug(url) || priorDay?.date || null;
-    if (!date || !match) return;
-    const agendaItems = extractAgendaItems($, card, text);
-    if (!agendaItems.length) return;
-    seen.add(url);
+
+  $('.tileItemLlistat').each((_, element) => {
+    const tile = $(element);
+    const namedDate = String(tile.find('a[name]').first().attr('name') || '')
+      .match(/^(20\d{2}-\d{2}-\d{2})$/);
+    const heading = normalize(tile.find('.tileItemAgendaTitle').first().text());
+    const day = heading.match(/^(dilluns|dimarts|dimecres|dijous|divendres|dissabte|diumenge)\s+(\d{1,2})$/);
+    const date = namedDate?.[1] || (day && dayDate(
+      Number(day[2]),
+      WEEKDAYS.get(day[1]),
+      weekStart
+    ));
+    const anchor = tile.find('.eventAgendaText > a[href]').first();
+    const url = agendaHref(anchor.attr('href'));
+    const title = cleanText(anchor.attr('title') || anchor.text());
+    const timeMatch = cleanText(tile.find('.eventAgendaDate').first().text())
+      .match(/\b([01]?\d|2[0-3]):([0-5]\d)\s*h?\b/i);
+    const content = tile.find('.eventAgendaContent').first();
+    const agendaItems = content.find('ol > li').toArray()
+      .map(item => cleanText($(item).text()))
+      .filter(item => item.length > 12);
+
+    if (!date || !url || !title || !timeMatch || !agendaItems.length) return;
+    const validDate = new Date(date);
+    if (Number.isNaN(validDate.getTime()) || validDate.toISOString().slice(0, 10) !== date) return;
+
     meetings.push({
       date,
-      time: `${match[1].padStart(2, '0')}:${match[2]}`,
+      time: `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`,
       title,
       agendaItems,
-      isPublic: privacyStatus(text),
+      isPublic: privacyStatus(cleanText(content.text())),
       url
     });
   });
+
   return meetings.filter(meeting => meeting.date >= todayInAndorra())
     .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
 }
