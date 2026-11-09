@@ -223,16 +223,20 @@
       const updated = new Date(data.updatedAt);
       const updatedText = Number.isNaN(updated.getTime()) ? '' : ' · l’' + updated.toLocaleString('ca-AD');
       status.dataset.updated = updatedText + (data.cached ? ' · memòria cau' : '');
-      if (data.agendaWarning) {
-        notice.textContent = 'No s’ha pogut actualitzar l’agenda del Consell General. Les iniciatives continuen disponibles.';
-        notice.classList.remove('hide');
-      } else if (data.refreshWarning) {
-        notice.textContent = data.refreshWarning + ' Es mostren les dades completes anteriors.';
-        notice.classList.remove('hide');
-      } else if (data.partial) {
+      const warnings = [];
+      if (data.refreshWarning) {
+        warnings.push(data.refreshWarning + ' Es mostren les dades completes anteriors.');
+      }
+      if (data.partial) {
         const incomplete = (data.categoriesChecked || []).filter(category => !category.available || !category.complete);
         const labels = incomplete.map(category => category.label).join(', ');
-        notice.textContent = 'La consulta no s’ha pogut completar per a totes les categories' + (labels ? ' (' + labels + ')' : '') + '. La llista pot ser parcial; consulta el registre oficial.';
+        warnings.push('La consulta no s’ha pogut completar per a totes les categories' + (labels ? ' (' + labels + ')' : '') + '. La llista pot ser parcial; consulta el registre oficial.');
+      }
+      if (data.agendaWarning) {
+        warnings.push('No s’ha pogut actualitzar l’agenda del Consell General. Les iniciatives continuen disponibles.');
+      }
+      if (warnings.length) {
+        notice.textContent = warnings.join(' ');
         notice.classList.remove('hide');
       }
       render();
