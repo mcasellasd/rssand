@@ -39,7 +39,7 @@
   function safeUrl(value) {
     try {
       const url = new URL(value);
-      return url.protocol === 'https:' && url.hostname === 'seu.consellgeneral.ad' ? url.href : '#';
+      return url.protocol === 'https:' && (url.hostname === 'seu.consellgeneral.ad' || (url.hostname === 'www.consellgeneral.ad' && url.pathname.startsWith('/ca/agenda/'))) ? url.href : '#';
     } catch (_) { return '#'; }
   }
   function renderSummary(markdown) {
@@ -122,10 +122,15 @@
         '<li><a href="' + safeUrl(document.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(document.title) + '</a></li>'
       ).join('');
       const docsHtml = docs ? '<details class="initiative-documents"><summary>' + item.documents.length + ' document(s)</summary><ul>' + docs + '</ul></details>' : '';
+      const agendaHtml = (item.agendaMeetings || []).map(meeting => {
+        const publicStatus = meeting.isPublic === true ? 'Reunió pública' : meeting.isPublic === false ? 'Reunió no pública' : 'Caràcter públic no indicat';
+        const agendaItems = (meeting.agendaItems || []).map(point => '<li>' + escapeHtml(point) + '</li>').join('');
+        return '<section class="initiative-agenda"><div class="initiative-agenda-heading"><i class="fa-regular fa-calendar" aria-hidden="true"></i><strong>Reunió prevista</strong><span>' + escapeHtml(displayDate(meeting.date)) + ' · ' + escapeHtml(meeting.time) + '</span></div><p>' + escapeHtml(meeting.title) + ' · ' + escapeHtml(publicStatus) + '</p><details><summary>Ordre del dia</summary><ol>' + agendaItems + '</ol></details><a href="' + safeUrl(meeting.url) + '" target="_blank" rel="noopener noreferrer">Consulta l’agenda oficial <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a></section>';
+      }).join('');
       return '<article class="initiative-card glass-card">' +
         '<div class="initiative-card-top"><span class="initiative-kind">' + escapeHtml(item.type) + '</span><time class="initiative-date">' + escapeHtml(displayDate(item.date)) + '</time></div>' +
         '<h3>' + escapeHtml(item.title) + '</h3><span class="initiative-stage ' + stageClass(item.stage) + '">' + escapeHtml(item.stage) + '</span>' +
-        '<p class="initiative-action">' + escapeHtml(item.latestAction) + '</p>' +
+        '<p class="initiative-action">' + escapeHtml(item.latestAction) + '</p>' + agendaHtml +
         '<div class="initiative-card-bottom"><a href="' + safeUrl(item.url) + '" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-arrow-up-right-from-square"></i> Fitxa oficial</a><button class="initiative-summary-button" type="button" data-initiative-id="' + escapeHtml(item.id) + '"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Resum ampliat amb IA</button>' + docsHtml + '</div></article>';
     }).join('');
   }
@@ -218,13 +223,20 @@
       const updated = new Date(data.updatedAt);
       const updatedText = Number.isNaN(updated.getTime()) ? '' : ' · l’' + updated.toLocaleString('ca-AD');
       status.dataset.updated = updatedText + (data.cached ? ' · memòria cau' : '');
+      const warnings = [];
       if (data.refreshWarning) {
-        notice.textContent = data.refreshWarning + ' Es mostren les dades completes anteriors.';
-        notice.classList.remove('hide');
-      } else if (data.partial) {
+        warnings.push(data.refreshWarning + ' Es mostren les dades completes anteriors.');
+      }
+      if (data.partial) {
         const incomplete = (data.categoriesChecked || []).filter(category => !category.available || !category.complete);
         const labels = incomplete.map(category => category.label).join(', ');
-        notice.textContent = 'La consulta no s’ha pogut completar per a totes les categories' + (labels ? ' (' + labels + ')' : '') + '. La llista pot ser parcial; consulta el registre oficial.';
+        warnings.push('La consulta no s’ha pogut completar per a totes les categories' + (labels ? ' (' + labels + ')' : '') + '. La llista pot ser parcial; consulta el registre oficial.');
+      }
+      if (data.agendaWarning) {
+        warnings.push('No s’ha pogut actualitzar l’agenda del Consell General. Les iniciatives continuen disponibles.');
+      }
+      if (warnings.length) {
+        notice.textContent = warnings.join(' ');
         notice.classList.remove('hide');
       }
       render();

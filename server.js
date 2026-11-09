@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { GoogleGenAI } = require('@google/genai');
 const { loadParliamentaryTracking, fetchOfficialPdf } = require('./src/parliamentary');
+const { loadParliamentaryAgenda, attachAgendaMeetings } = require('./src/parliamentary-agenda');
 
 const ai = process.env.GEMINI_API_KEY && process.env.DISABLE_AI !== 'true'
   ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
@@ -1380,9 +1381,23 @@ app.get('/api/news', async (req, res) => {
 
 app.get('/api/parliamentary-tracking', async (req, res) => {
   try {
-    const data = await loadParliamentaryTracking({ refresh: req.query.refresh === 'true' });
+    const refresh = req.query.refresh === 'true';
+    const data = await loadParliamentaryTracking({ refresh });
+    let agenda = { meetings: [], updatedAt: null };
+    try {
+      agenda = await loadParliamentaryAgenda({ refresh });
+    } catch (error) {
+      console.warn('No s’ha pogut consultar l’agenda del Consell General:', error.message);
+      agenda = { meetings: [], updatedAt: null, warning: error.message };
+    }
     res.set('Cache-Control', 'public, max-age=300');
-    res.json(data);
+    res.json({
+      ...data,
+      initiatives: attachAgendaMeetings(data.initiatives || [], agenda.meetings || []),
+      agendaUpdatedAt: agenda.updatedAt,
+      agendaSourceUrl: agenda.sourceUrl || 'https://www.consellgeneral.ad/ca/agenda',
+      agendaWarning: agenda.warning || null
+    });
   } catch (error) {
     console.error('Error carregant el seguiment parlamentari:', error.message);
     res.status(502).json({
